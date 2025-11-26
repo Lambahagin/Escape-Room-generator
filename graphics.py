@@ -1,8 +1,8 @@
 import streamlit as st
 
-def render_game_scene(state_mode, progress, total_time, elapsed_time, monster_anchor_x=50):
+def render_game_scene(state_mode, progress, total_time, elapsed_time, monster_anchor_x=0):
     """
-    Tegner spillets grafik. Version 6.0 - Smooth Pursuit.
+    Tegner spillets grafik. Version 6.1 - Start ved 0 & Solid Anker.
     """
     
     # --- 1. KONSTANTER ---
@@ -11,7 +11,8 @@ def render_game_scene(state_mode, progress, total_time, elapsed_time, monster_an
     monster_y = ground_y - 60
     player_y = ground_y - 50
     
-    start_platform_x = 50
+    # START POSITION ÆNDRET TIL 0
+    start_platform_x = 0   
     step_size = 100         
     
     # Beregn spillerens position (Målet)
@@ -22,7 +23,6 @@ def render_game_scene(state_mode, progress, total_time, elapsed_time, monster_an
     monster_anim = ""
     
     # Hvor skal monsteret tegnes LIGE NU (før animationen starter)?
-    # Vi bruger ankeret fra app.py, så vi undgår "hop"
     initial_monster_x = monster_anchor_x
     
     if state_mode == 'PLAYING' and total_time > 0:
@@ -32,7 +32,6 @@ def render_game_scene(state_mode, progress, total_time, elapsed_time, monster_an
         monster_anim = f'<animateTransform attributeName="transform" type="translate" from="{initial_monster_x} {monster_y}" to="{target_player_x} {monster_y}" dur="{time_left}s" fill="freeze" />'
         
     elif state_mode == 'DEATH':
-        # Ved død står monsteret ved spilleren
         initial_monster_x = target_player_x
         monster_anim = ""
         
@@ -82,7 +81,6 @@ def render_game_scene(state_mode, progress, total_time, elapsed_time, monster_an
     html += '</g>'
 
     # MONSTER
-    # Vi bruger initial_monster_x som startpunkt for SVG transformen
     html += f'<g transform="translate({initial_monster_x}, {monster_y})">'
     html += monster_anim
     html += '<path d="M -20,0 Q -30,-40 0,-60 Q 30,-40 20,0 Q 10,20 -20,0" fill="black" filter="url(#glow)" opacity="0.95" />'
