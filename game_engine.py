@@ -4,7 +4,7 @@ import json
 def render_js_game(scenario_json):
     """
     Genererer HTML/JS spil.
-    Version: Smooth Pursuit & Level Support
+    Version: Physics-based Movement & Off-screen Start
     """
     game_data = json.dumps(scenario_json)
     
@@ -22,7 +22,7 @@ def render_js_game(scenario_json):
         #status-bar {{ position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; font-size: 18px; font-weight: bold; pointer-events: none; }}
         #overlay {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; display: none; }}
         .overlay-msg {{ font-size: 30px; color: red; margin-bottom: 20px; text-align: center; }}
-        .code-box {{ font-size: 24px; color: lime; border: 2px dashed lime; padding: 10px; margin-top: 10px; }}
+        .code-box {{ font-size: 24px; color: lime; border: 2px dashed lime; padding: 10px; margin-top: 10px; user-select: text; }}
     </style>
     </head>
     <body>
@@ -51,7 +51,7 @@ def render_js_game(scenario_json):
                 <text x="0" y="-20" fill="#0f0" font-size="10" text-anchor="middle">456</text>
             </g>
 
-            <g id="monster" transform="translate(20, 140)">
+            <g id="monster" transform="translate(-100, 140)">
                 <path d="M -25,0 Q -35,-50 0,-70 Q 35,-50 25,0 Q 12,20 -25,0" fill="black" opacity="0.95" filter="url(#glow)"/>
                 <circle cx="-10" cy="-40" r="5" fill="red" />
                 <circle cx="10" cy="-40" r="5" fill="red" />
@@ -90,13 +90,12 @@ def render_js_game(scenario_json):
         let lives = 3;
         let isPlaying = false;
         
-        // Fysik variabler
+        // FYSICS VARIABLES
         let playerX = 50;
-        let monsterX = 20;
+        let monsterX = -70; // START POSITION (Uden for skærmen til venstre)
         let timeRemaining = totalTime;
         let lastFrameTime = 0;
 
-        // UI Elementer
         const playerEl = document.getElementById('player');
         const monsterEl = document.getElementById('monster');
         const timeEl = document.getElementById('timer-display');
@@ -109,7 +108,7 @@ def render_js_game(scenario_json):
         const winCodeDiv = document.getElementById('win-code');
         const restartBtn = document.getElementById('restart-btn');
 
-        // Byg paneler
+        // Setup Paneler
         const panelsGroup = document.getElementById('panels');
         for(let i=0; i<4; i++) {{
             let rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -127,7 +126,7 @@ def render_js_game(scenario_json):
             lastFrameTime = performance.now();
             
             playerX = 50;
-            monsterX = 20; // Start position
+            monsterX = -70; // Reset monster til uden for skærmen
             updatePositions();
             
             overlay.style.display = 'none';
@@ -140,8 +139,8 @@ def render_js_game(scenario_json):
         function restartLevel() {{
             lives--;
             if (lives <= 0) {{
-                alert("GAME OVER - Du skal genstarte hele spillet.");
-                location.reload(); // Hard reset
+                alert("GAME OVER - Du skal genstarte.");
+                location.reload();
                 return;
             }}
             startGame();
@@ -159,12 +158,11 @@ def render_js_game(scenario_json):
             btn1.style.display = "block";
             btn2.style.display = "block";
             
-            // Flyt spiller (Justeret til midten af panelerne)
-            // Start: 50. Panel 1: 150. Panel 2: 250...
+            // Flyt spiller (Hop frem)
             playerX = 50 + (currentStep * 100);
             if (currentStep > 0) playerX += 50;
             
-            // Vi opdaterer IKKE monsterX her. Monsteret glider bare videre.
+            // BEMÆRK: Vi rører IKKE monsterX her. Det fortsætter bare.
             updatePositions();
         }}
 
@@ -173,7 +171,6 @@ def render_js_game(scenario_json):
                 if (optionIdx === 0) startGame();
                 return;
             }}
-
             let q = steps[currentStep];
             let choice = q.options[optionIdx];
 
@@ -193,31 +190,33 @@ def render_js_game(scenario_json):
         function gameLoop(timestamp) {{
             if (!isPlaying) return;
 
-            // Beregn Delta Time (Tid siden sidste frame i sekunder)
+            // Delta Time (sekunder siden sidste frame)
             let dt = (timestamp - lastFrameTime) / 1000;
             lastFrameTime = timestamp;
 
             timeRemaining -= dt;
             timeEl.innerText = `TID: ${{Math.max(0, timeRemaining).toFixed(1)}}s`;
 
-            // --- DEN NYE JAGT LOGIK ---
-            // Vi beregner den nødvendige hastighed for at nå spilleren præcis når tiden er 0
+            // --- FYSIC BASED MOVEMENT (INGEN HOP) ---
+            // Vi beregner hastigheden dynamisk, men positionen opdateres inkrementelt.
+            
+            // 1. Find afstanden til målet LIGE NU
             let targetX = playerX;
             let distance = targetX - monsterX;
             
-            // Undgå division med 0 eller negativ tid
-            let safeTime = Math.max(timeRemaining, 0.1); 
+            // 2. Undgå division med 0 eller meget små tal
+            let safeTime = Math.max(timeRemaining, 0.01);
             
-            // Hastighed = Distance / Tid
+            // 3. Beregn nødvendig fart: (Afstand / Tid)
             let speed = distance / safeTime;
             
-            // Flyt monsteret
+            // 4. Flyt monsteret (Hastighed * DeltaTid)
             monsterX += speed * dt;
             
             updatePositions();
 
-            // Tjek om tiden er gået (eller monsteret er meget tæt på)
-            if (timeRemaining <= 0 || (monsterX >= playerX - 10)) {{
+            // Tjek om Monster har fanget Spiller (Inden for 5 pixels)
+            if (timeRemaining <= 0 || monsterX >= (playerX - 5)) {{
                 playerDie("Skyggen fangede dig!");
             }} else {{
                 requestAnimationFrame(gameLoop);
@@ -231,8 +230,7 @@ def render_js_game(scenario_json):
             overlayText.style.color = "red";
             winCodeDiv.style.display = "none";
             restartBtn.style.display = "block";
-            
-            // Dødsanimation: Fald ned
+            // Fald animation
             playerEl.setAttribute('transform', `translate(${{playerX}}, 400)`);
         }}
 
@@ -243,7 +241,6 @@ def render_js_game(scenario_json):
             overlayText.style.color = "lime";
             winCodeDiv.style.display = "block";
             restartBtn.style.display = "none";
-            
             // Spiller til sikkerhed
             playerEl.setAttribute('transform', `translate(550, 150)`);
         }}
