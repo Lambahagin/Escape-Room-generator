@@ -63,8 +63,6 @@ elif st.session_state.mode == 'BRIEFING':
     
     st.title("📁 MISSION BRIEFING")
     
-    # HER VISER VI NU SCENEN (STATISK)
-    # Vi sender 'BRIEFING' som mode, og 0 tid gået
     graphics.render_game_scene('BRIEFING', 0, room['time_limit'], 0)
     
     st.info(f"**HISTORIE:** {room['story']}")
@@ -90,9 +88,10 @@ elif st.session_state.mode == 'PLAYING':
         st.rerun()
 
     lives_icon = "❤️" * st.session_state.lives
-    st.markdown(f"""<div class="status-bar">LIV: {lives_icon} &nbsp;|&nbsp; TID: {int(time_left)}s &nbsp;|&nbsp; TRIN: {idx+1}/{len(steps)}</div>""", unsafe_allow_html=True)
+    # Opdateret status bar UDEN tid
+    st.markdown(f"""<div class="status-bar">LIV: {lives_icon} &nbsp;|&nbsp; TRIN: {idx+1}/{len(steps)}</div>""", unsafe_allow_html=True)
 
-    # Grafik (Animeret)
+    # Grafik
     graphics.render_game_scene('PLAYING', idx, room['time_limit'], elapsed)
     
     if idx < len(steps):
