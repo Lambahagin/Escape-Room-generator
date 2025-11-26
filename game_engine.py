@@ -3,9 +3,9 @@ import json
 
 def render_js_game(scenario_json):
     """
-    Genererer en komplet HTML/JS spil-pakke baseret på scenariet.
+    Genererer HTML/JS spil.
+    Version: Smooth Pursuit & Level Support
     """
-    # Vi konverterer Python-data til JSON streng som JS kan læse
     game_data = json.dumps(scenario_json)
     
     html_code = f"""
@@ -13,7 +13,7 @@ def render_js_game(scenario_json):
     <html>
     <head>
     <style>
-        body {{ margin: 0; background: #000; color: white; font-family: monospace; overflow: hidden; }}
+        body {{ margin: 0; background: #000; color: white; font-family: monospace; overflow: hidden; user-select: none; }}
         #game-container {{ position: relative; width: 600px; height: 450px; border: 2px solid #444; border-radius: 10px; background: radial-gradient(circle, #444 0%, #111 100%); margin: 0 auto; }}
         svg {{ width: 100%; height: 350px; display: block; }}
         #ui-layer {{ height: 100px; padding: 10px; background: #222; display: flex; flex-direction: column; align-items: center; justify-content: center; border-top: 2px solid #444; }}
@@ -30,12 +30,13 @@ def render_js_game(scenario_json):
     <div id="game-container">
         <div id="status-bar">
             <span id="lives-display">❤️❤️❤️</span>
-            <span id="timer-display">TID: 20.0s</span>
+            <span id="timer-display">KLAR?</span>
         </div>
 
         <svg id="game-canvas">
             <rect x="0" y="200" width="100" height="150" fill="#333" />
             <rect x="500" y="200" width="100" height="150" fill="#333" />
+            
             <line x1="100" y1="205" x2="500" y2="205" stroke="cyan" stroke-width="4" />
             <line x1="100" y1="235" x2="500" y2="235" stroke="cyan" stroke-width="4" />
             <g id="panels" fill="rgba(0,255,255,0.2)"></g>
@@ -47,49 +48,55 @@ def render_js_game(scenario_json):
                 <line x1="0" y1="20" x2="15" y2="35" stroke="#0f0" stroke-width="2" />
                 <line x1="0" y1="40" x2="-10" y2="60" stroke="#0f0" stroke-width="2" />
                 <line x1="0" y1="40" x2="10" y2="60" stroke="#0f0" stroke-width="2" />
+                <text x="0" y="-20" fill="#0f0" font-size="10" text-anchor="middle">456</text>
             </g>
 
             <g id="monster" transform="translate(20, 140)">
-                <path d="M -20,0 Q -30,-40 0,-60 Q 30,-40 20,0 Q 10,20 -20,0" fill="black" opacity="0.9" />
-                <circle cx="-8" cy="-35" r="4" fill="red" />
-                <circle cx="8" cy="-35" r="4" fill="red" />
+                <path d="M -25,0 Q -35,-50 0,-70 Q 35,-50 25,0 Q 12,20 -25,0" fill="black" opacity="0.95" filter="url(#glow)"/>
+                <circle cx="-10" cy="-40" r="5" fill="red" />
+                <circle cx="10" cy="-40" r="5" fill="red" />
             </g>
+            
+            <defs>
+                <filter id="glow"><feGaussianBlur stdDeviation="2.5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
         </svg>
 
         <div id="ui-layer">
-            <div id="question-text" style="margin-bottom: 10px; font-weight:bold;">Klar?</div>
+            <div id="question-text" style="margin-bottom: 10px; font-weight:bold;">Tryk Start for at begynde</div>
             <div style="display:flex;">
-                <button id="btn1" class="btn" onclick="checkAnswer(0)">Start</button>
+                <button id="btn1" class="btn" onclick="checkAnswer(0)">Start Level</button>
                 <button id="btn2" class="btn" onclick="checkAnswer(1)" style="display:none;">-</button>
             </div>
         </div>
 
         <div id="overlay">
             <div class="overlay-msg" id="overlay-text">GAME OVER</div>
-            <button class="btn" id="restart-btn" onclick="startGame()">Prøv Igen</button>
+            <button class="btn" id="restart-btn" onclick="restartLevel()">Prøv Igen (-1 Liv)</button>
             <div id="win-code" style="display:none;">
-                <div>Indtast denne kode i Python:</div>
-                <div class="code-box">SEJR-456</div>
+                <div>KODE TIL NÆSTE RUM:</div>
+                <div class="code-box">LEVEL-UP</div>
             </div>
         </div>
     </div>
 
     <script>
-        // DATA FRA PYTHON
         const gameData = {game_data};
         const room = gameData.rooms[0];
         const steps = room.steps;
         const totalTime = room.time_limit;
 
-        // TILSTAND
         let currentStep = 0;
         let lives = 3;
-        let startTime = 0;
         let isPlaying = false;
-        let animationFrame;
-        let playerX = 50; // Start position
         
-        // ELEMENTER
+        // Fysik variabler
+        let playerX = 50;
+        let monsterX = 20;
+        let timeRemaining = totalTime;
+        let lastFrameTime = 0;
+
+        // UI Elementer
         const playerEl = document.getElementById('player');
         const monsterEl = document.getElementById('monster');
         const timeEl = document.getElementById('timer-display');
@@ -102,7 +109,7 @@ def render_js_game(scenario_json):
         const winCodeDiv = document.getElementById('win-code');
         const restartBtn = document.getElementById('restart-btn');
 
-        // TEGN PANELER
+        // Byg paneler
         const panelsGroup = document.getElementById('panels');
         for(let i=0; i<4; i++) {{
             let rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -115,16 +122,29 @@ def render_js_game(scenario_json):
 
         function startGame() {{
             currentStep = 0;
-            startTime = Date.now();
             isPlaying = true;
-            playerX = 50; // Reset player pos
-            updatePlayerPos();
+            timeRemaining = totalTime;
+            lastFrameTime = performance.now();
+            
+            playerX = 50;
+            monsterX = 20; // Start position
+            updatePositions();
+            
             overlay.style.display = 'none';
-            lives = 3; // Eller behold liv fra Python? Lad os resette her for JS-flow
-            livesEl.innerHTML = "❤️❤️❤️";
+            livesEl.innerHTML = "❤️".repeat(lives) + "🖤".repeat(3-lives);
             
             showQuestion();
-            gameLoop();
+            requestAnimationFrame(gameLoop);
+        }}
+
+        function restartLevel() {{
+            lives--;
+            if (lives <= 0) {{
+                alert("GAME OVER - Du skal genstarte hele spillet.");
+                location.reload(); // Hard reset
+                return;
+            }}
+            startGame();
         }}
 
         function showQuestion() {{
@@ -139,16 +159,18 @@ def render_js_game(scenario_json):
             btn1.style.display = "block";
             btn2.style.display = "block";
             
-            // Flyt spiller visuelt
-            // Start: 50. Panel 1: 150. Panel 2: 250... Sikkerhed: 550
+            // Flyt spiller (Justeret til midten af panelerne)
+            // Start: 50. Panel 1: 150. Panel 2: 250...
             playerX = 50 + (currentStep * 100);
-            if (currentStep > 0) playerX += 50; // Justering til midten af panel
-            updatePlayerPos();
+            if (currentStep > 0) playerX += 50;
+            
+            // Vi opdaterer IKKE monsterX her. Monsteret glider bare videre.
+            updatePositions();
         }}
 
         function checkAnswer(optionIdx) {{
             if (!isPlaying) {{
-                if (optionIdx === 0) startGame(); // Start knap funktion
+                if (optionIdx === 0) startGame();
                 return;
             }}
 
@@ -159,87 +181,65 @@ def render_js_game(scenario_json):
                 currentStep++;
                 showQuestion();
             }} else {{
-                takeDamage("Forkert svar!");
+                playerDie("Forkert svar!");
             }}
         }}
 
-        function takeDamage(reason) {{
-            lives--;
-            livesEl.innerHTML = "❤️".repeat(lives) + "🖤".repeat(3-lives);
-            if (lives <= 0) {{
-                gameOver(reason);
-            }} else {{
-                // Lille straf: Reset step? Eller bare mist liv?
-                // Lad os resette til start af broen for drama
-                currentStep = 0;
-                showQuestion();
-                // Visuelt flash
-                document.body.style.background = "#500";
-                setTimeout(() => document.body.style.background = "#000", 100);
-            }}
-        }}
-
-        function updatePlayerPos() {{
+        function updatePositions() {{
             playerEl.setAttribute('transform', `translate(${{playerX}}, 150)`);
+            monsterEl.setAttribute('transform', `translate(${{monsterX}}, 140)`);
         }}
 
-        function gameLoop() {{
+        function gameLoop(timestamp) {{
             if (!isPlaying) return;
 
-            let elapsed = (Date.now() - startTime) / 1000;
-            let timeLeft = totalTime - elapsed;
+            // Beregn Delta Time (Tid siden sidste frame i sekunder)
+            let dt = (timestamp - lastFrameTime) / 1000;
+            lastFrameTime = timestamp;
 
-            // Opdater timer tekst
-            timeEl.innerText = `TID: ${{Math.max(0, timeLeft).toFixed(1)}}s`;
+            timeRemaining -= dt;
+            timeEl.innerText = `TID: ${{Math.max(0, timeRemaining).toFixed(1)}}s`;
 
-            // 1. FLYT MONSTER (SMOOTH)
-            // Monster starter ved 20. Skal fange spiller ved playerX præcis når tid er gået.
-            // MEN playerX ændrer sig.
+            // --- DEN NYE JAGT LOGIK ---
+            // Vi beregner den nødvendige hastighed for at nå spilleren præcis når tiden er 0
+            let targetX = playerX;
+            let distance = targetX - monsterX;
             
-            // Simpel logik: Monster bevæger sig med konstant hastighed mod spilleren
-            // Hastighed = Distance / Tid_Tilbage
+            // Undgå division med 0 eller negativ tid
+            let safeTime = Math.max(timeRemaining, 0.1); 
             
-            // Faktisk, for at det ser "jagtende" ud:
-            // Monster Position = StartPos + (TotalDist * (Elapsed / TotalTime))
-            // Det betyder monsteret altid er "på vej" og når frem ved 100%
+            // Hastighed = Distance / Tid
+            let speed = distance / safeTime;
             
-            let monsterStart = 20;
-            // Målet er spillerens nuværende position
-            let target = playerX; 
+            // Flyt monsteret
+            monsterX += speed * dt;
             
-            // Hvor langt burde monsteret være i % af tiden?
-            let percent = elapsed / totalTime;
-            
-            let monsterCurrent = monsterStart + ((target - monsterStart) * percent);
-            
-            // Tegn monster
-            monsterEl.setAttribute('transform', `translate(${{monsterCurrent}}, 140)`);
+            updatePositions();
 
-            // Tjek om tiden er gået
-            if (timeLeft <= 0) {{
-                // Animation slut - monster er ved spiller
-                gameOver("Tiden er gået! Monsteret fangede dig.");
+            // Tjek om tiden er gået (eller monsteret er meget tæt på)
+            if (timeRemaining <= 0 || (monsterX >= playerX - 10)) {{
+                playerDie("Skyggen fangede dig!");
             }} else {{
                 requestAnimationFrame(gameLoop);
             }}
         }}
 
-        function gameOver(msg) {{
+        function playerDie(reason) {{
             isPlaying = false;
             overlay.style.display = "flex";
-            overlayText.innerText = msg;
+            overlayText.innerText = reason;
             overlayText.style.color = "red";
             winCodeDiv.style.display = "none";
             restartBtn.style.display = "block";
             
-            // Fald animation
-            playerEl.setAttribute('transform', `translate(${{playerX}}, 400)`); // Drop
+            // Dødsanimation: Fald ned
+            playerEl.setAttribute('transform', `translate(${{playerX}}, 400)`);
         }}
 
         function winGame() {{
             isPlaying = false;
             overlay.style.display = "flex";
-            overlayText.innerText = "DU KLAREDE DET!";
+            overlayText.innerText = "RUM KLARET!";
             overlayText.style.color = "lime";
             winCodeDiv.style.display = "block";
             restartBtn.style.display = "none";
@@ -247,12 +247,6 @@ def render_js_game(scenario_json):
             // Spiller til sikkerhed
             playerEl.setAttribute('transform', `translate(550, 150)`);
         }}
-        
-        // Initielt setup (Før start trykkes)
-        btn1.innerText = "START SPIL";
-        btn2.style.display = "none";
-        qText.innerText = "Tryk start når du er klar...";
-
     </script>
     </body>
     </html>
