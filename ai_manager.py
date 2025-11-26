@@ -3,25 +3,24 @@ import json
 import streamlit as st
 
 def get_client():
-    # Tjekker om nøglen findes, ellers returnerer None
     if "OPENAI_API_KEY" in st.secrets:
         return OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     return None
 
 def get_fallback_scenario():
-    """Returnerer et fast scenarie hvis AI fejler"""
+    """Nød-scenarie med korrekt matematik."""
     return {
         "title": "Nød-protokol (Offline)",
-        "intro": "AI-forbindelsen svigtede, men spillet fortsætter...",
+        "intro": "AI-forbindelsen svigtede. Vi kører manuel protokol.",
         "rooms": [
             {
                 "type": "BRIDGE",
-                "story": "Du står på en glasbro. En mørk skygge nærmer sig bagfra. Vælg rigtigt for at overleve.",
-                "time_limit": 30,
+                "story": "Du står på glasbroen. Systemet er nede, men matematikken gælder stadig.",
+                "time_limit": 20,
                 "steps": [
-                    {"q": "Hvad er 2x = 10?", "options": ["x=5", "x=2"], "correct": "x=5"},
-                    {"q": "Find f'(x) af x^2", "options": ["2x", "x"], "correct": "2x"},
-                    {"q": "Er pi > 3?", "options": ["Ja", "Nej"], "correct": "Ja"}
+                    {"q": "Hvad er 10 + 10?", "options": ["20", "22"], "correct": "20"},
+                    {"q": "Isoler x i: 2x = 8", "options": ["x=4", "x=2"], "correct": "x=4"},
+                    {"q": "Hvad er kvadratroden af 49?", "options": ["7", "9"], "correct": "7"}
                 ]
             }
         ]
@@ -30,13 +29,24 @@ def get_fallback_scenario():
 def generate_scenario(fag, emne):
     client = get_client()
     
-    # Hvis vi ikke har en klient, eller hvis kaldet fejler, brug fallback
     if not client:
         return get_fallback_scenario()
 
+    # Opdateret prompt med strammere regler
     prompt = f"""
-    Du er Game Master. Lav et spil scenarie baseret på {fag} ({emne}).
-    Output SKAL være rå JSON (ingen markdown '```json' rundt om):
+    Du er Game Master for et spil baseret på Squid Game.
+    Generer et scenarie med 1 rum af typen 'BRIDGE' baseret på faget {fag} og emnet {emne}.
+    
+    REGLER FOR OPGAVER:
+    1. Der skal være præcis 3 spørgsmål (steps).
+    2. 'options' SKAL indeholde præcis 2 svarmuligheder.
+    3. Én af mulighederne SKAL være matematisk/fysisk 100% korrekt.
+    4. Den anden mulighed skal være forkert.
+    5. Feltet 'correct' SKAL være helt identisk (tegn for tegn) med den rigtige af de to 'options'.
+    
+    Tiden skal være 20 sekunder.
+    
+    Output SKAL være gyldig JSON:
     {{
         "title": "Kort titel",
         "intro": "Kort intro historie",
@@ -44,11 +54,11 @@ def generate_scenario(fag, emne):
             {{
                 "type": "BRIDGE",
                 "story": "Beskrivelse af situationen.",
-                "time_limit": 45,
+                "time_limit": 20,
                 "steps": [
-                    {{"q": "Spørgsmål 1", "options": ["Rigtigt Svar", "Forkert"], "correct": "Rigtigt Svar"}},
-                    {{"q": "Spørgsmål 2", "options": ["Rigtigt Svar", "Forkert"], "correct": "Rigtigt Svar"}},
-                    {{"q": "Spørgsmål 3", "options": ["Rigtigt Svar", "Forkert"], "correct": "Rigtigt Svar"}}
+                    {{"q": "Spørgsmål 1", "options": ["Svar A", "Svar B"], "correct": "Svar A"}},
+                    {{"q": "Spørgsmål 2", "options": ["Svar A", "Svar B"], "correct": "Svar A"}},
+                    {{"q": "Spørgsmål 3", "options": ["Svar A", "Svar B"], "correct": "Svar A"}}
                 ]
             }}
         ]
@@ -57,12 +67,11 @@ def generate_scenario(fag, emne):
     
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo", # Skift til gpt-4-turbo for bedre matematik
+            model="gpt-3.5-turbo", 
             messages=[{"role": "system", "content": prompt}],
-            temperature=0.7,
+            temperature=0.5, # Lavere temperatur = mere præcis matematik
             response_format={"type": "json_object"}
         )
-        # Vi parser JSON svaret
         data = json.loads(response.choices[0].message.content)
         return data
     except Exception as e:
