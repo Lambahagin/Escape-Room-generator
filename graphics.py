@@ -1,66 +1,51 @@
 import streamlit as st
 
-def render_game_scene(state_mode, progress, total_time, elapsed_time, monster_anchor_x=0):
+def render_game_scene(state_mode, player_step, total_time, elapsed_time, monster_start_x):
     """
-    Tegner spillets grafik. Version 6.1 - Start ved 0 & Solid Anker.
+    Version 7.0: Dum grafik-motor.
+    Den tegner kun fra A (monster_start_x) til B (player_x) over T (remaining_time).
     """
     
-    # --- 1. KONSTANTER ---
+    # --- KONSTANTER ---
     scene_width = 600
     ground_y = 200
     monster_y = ground_y - 60
     player_y = ground_y - 50
     
-    # START POSITION ÆNDRET TIL 0
-    start_platform_x = 0   
-    step_size = 100         
+    step_size = 100
+    player_x = 150 + (player_step * step_size)
     
-    # Beregn spillerens position (Målet)
-    target_player_x = 150 + (progress * step_size)
-    
-    # --- 2. ANIMATIONS LOGIK ---
-    
+    # --- LOGIK ---
     monster_anim = ""
+    current_monster_visual_x = monster_start_x # Hvor tegner vi monsteret?
     
-    # Hvor skal monsteret tegnes LIGE NU (før animationen starter)?
-    initial_monster_x = monster_anchor_x
-    
-    if state_mode == 'PLAYING' and total_time > 0:
+    if state_mode == 'PLAYING':
         time_left = max(0, total_time - elapsed_time)
         
-        # Animation: Fra Anker-punktet -> Til Spilleren -> Over resten af tiden
-        monster_anim = f'<animateTransform attributeName="transform" type="translate" from="{initial_monster_x} {monster_y}" to="{target_player_x} {monster_y}" dur="{time_left}s" fill="freeze" />'
-        
+        # Hvis tiden er gået, skal den ikke animere, men stå ved målet
+        if time_left <= 0:
+            current_monster_visual_x = player_x
+        else:
+            # Animation fra ANKERET (monster_start_x) til SPILLEREN (player_x)
+            monster_anim = f'<animateTransform attributeName="transform" type="translate" from="{monster_start_x} {monster_y}" to="{player_x} {monster_y}" dur="{time_left}s" fill="freeze" />'
+            current_monster_visual_x = monster_start_x # Start animation herfra
+
     elif state_mode == 'DEATH':
-        initial_monster_x = target_player_x
-        monster_anim = ""
-        
-    elif state_mode == 'BRIEFING':
-        initial_monster_x = start_platform_x
-        monster_anim = ""
-    else:
-        return 
-
-    # Spiller Animation (Død)
-    player_y_anim = ""
-    player_opacity = "1.0"
-    if state_mode == 'DEATH':
-        player_y_anim = '<animateTransform attributeName="transform" type="translate" from="0 0" to="0 300" dur="1s" fill="freeze" />'
-        player_opacity = "0.6"
-
-    # --- 3. BYG SVG ---
+        current_monster_visual_x = player_x # Monster står oven på spiller
     
+    elif state_mode == 'BRIEFING':
+        current_monster_visual_x = 0 # Start helt til venstre
+
+    # --- TEGNING (SVG) ---
     html = f'<div style="width:100%; display:flex; justify-content:center; margin-bottom:20px;">'
     html += f'<svg width="{scene_width}" height="350" style="background: radial-gradient(circle, #444 0%, #111 100%); border: 2px solid #666; border-radius: 10px;">'
     
-    # BAGGRUND
+    # Baggrund & Platforme
     html += '<rect x="0" y="0" width="100%" height="100%" fill="none" />'
-    html += f'<rect x="0" y="{ground_y}" width="100" height="150" fill="#555" stroke="#777" stroke-width="2"/>'
-    html += f'<text x="50" y="{ground_y + 40}" fill="#aaa" font-family="monospace" text-anchor="middle" font-size="12">START</text>'
-    html += f'<rect x="500" y="{ground_y}" width="100" height="150" fill="#555" stroke="#777" stroke-width="2"/>'
-    html += f'<text x="550" y="{ground_y + 40}" fill="#aaa" font-family="monospace" text-anchor="middle" font-size="12">SIKKERHED</text>'
-
-    # BROEN
+    html += f'<rect x="0" y="{ground_y}" width="100" height="150" fill="#555" stroke="#777" stroke-width="2"/>' # Start plat
+    html += f'<rect x="500" y="{ground_y}" width="100" height="150" fill="#555" stroke="#777" stroke-width="2"/>' # Slut plat
+    
+    # Broen
     html += f'<line x1="100" y1="{ground_y+5}" x2="500" y2="{ground_y+5}" stroke="#00ffff" stroke-width="4" />'
     html += f'<line x1="100" y1="{ground_y+35}" x2="500" y2="{ground_y+35}" stroke="#00ffff" stroke-width="4" />'
     html += f'<g stroke="#00ffff" stroke-width="1" fill="rgba(200, 255, 255, 0.2)">'
@@ -68,9 +53,13 @@ def render_game_scene(state_mode, progress, total_time, elapsed_time, monster_an
         html += f'<rect x="{110 + (i * 100)}" y="{ground_y+5}" width="80" height="30" />'
     html += '</g>'
 
-    # SPILLEREN
-    html += f'<g transform="translate({target_player_x}, {player_y})" opacity="{player_opacity}">'
-    html += player_y_anim
+    # SPILLER
+    player_anim = ""
+    if state_mode == 'DEATH':
+        player_anim = '<animateTransform attributeName="transform" type="translate" from="0 0" to="0 300" dur="1s" fill="freeze" />'
+    
+    html += f'<g transform="translate({player_x}, {player_y})">'
+    html += player_anim
     html += '<circle cx="0" cy="0" r="12" fill="none" stroke="#00ff00" stroke-width="2" />'
     html += '<line x1="0" y1="12" x2="0" y2="40" stroke="#00ff00" stroke-width="2" />'
     html += '<line x1="0" y1="20" x2="-15" y2="35" stroke="#00ff00" stroke-width="2" />'
@@ -81,7 +70,8 @@ def render_game_scene(state_mode, progress, total_time, elapsed_time, monster_an
     html += '</g>'
 
     # MONSTER
-    html += f'<g transform="translate({initial_monster_x}, {monster_y})">'
+    # Transform bruger animationen hvis den findes, ellers fast position
+    html += f'<g transform="translate({current_monster_visual_x}, {monster_y})">'
     html += monster_anim
     html += '<path d="M -20,0 Q -30,-40 0,-60 Q 30,-40 20,0 Q 10,20 -20,0" fill="black" filter="url(#glow)" opacity="0.95" />'
     html += '<path d="M -15,-20 Q -40,-10 -30,10" stroke="black" stroke-width="3" fill="none" />'
