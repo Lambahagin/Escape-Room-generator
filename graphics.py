@@ -2,42 +2,56 @@ import streamlit as st
 
 def render_game_scene(state_mode, progress, total_time, elapsed_time=0):
     """
-    Tegner spillets grafik. Version 5.2 - Fixet Monster Animation.
+    Tegner spillets grafik. Version 5.4 - Korrekt jagt-logik.
     """
     
     # --- 1. KONSTANTER & FARVER ---
     bridge_color = "#00ffff"     # Neon cyan
-    platform_color = "#333333"   # Mørkegrå platforme
+    platform_color = "#555555"   # Endnu lysere grå platforme for kontrast
     glass_color = "rgba(200, 255, 255, 0.2)" 
+    
+    # Baggrund (Lysere end før for at se skyggen)
+    bg_center = "#555555" 
+    bg_edge = "#222222"   
     
     # Koordinater
     scene_width = 600
     ground_y = 200
-    monster_y_pos = ground_y - 60 # Hvor højt oppe monsteret svæver
+    monster_y_pos = ground_y - 60
     
     start_x = 50   # Monster start
-    end_x = 500    # Spiller start
+    
+    # Spillerens position (Dynamisk)
+    step_size = 100
+    player_base_x = 150 + (progress * step_size)
     
     # --- 2. BEREGN POSITIONER ---
-    
-    # Monsterets position
-    # Vi skal styre både X og Y i animationen, ellers hopper den til Y=0
     
     monster_current_x = start_x
     monster_anim = ""
     
     if state_mode == 'PLAYING' and total_time > 0:
+        # 1. Hvor stor procentdel af tiden er gået?
         percent_done = min(elapsed_time / total_time, 1.0)
         
-        # Beregn hvor monsteret er LIGE NU
-        monster_current_x = start_x + ((end_x - start_x) * percent_done)
+        # 2. Hvad er den totale distance monsteret skal dække for at fange spilleren LIGE NU?
+        total_distance_to_catch = player_base_x - start_x
+        
+        # 3. Hvor burde monsteret være lige nu baseret på tiden?
+        monster_current_x = start_x + (total_distance_to_catch * percent_done)
+        
+        # 4. Hvor lang tid er der tilbage?
         time_left = max(0, total_time - elapsed_time)
         
-        # Animation: Fra nuværende X til slut X, men BEHOLD Y-positionen!
-        monster_anim = f'<animateTransform attributeName="transform" type="translate" from="{monster_current_x} {monster_y_pos}" to="{end_x} {monster_y_pos}" dur="{time_left}s" fill="freeze" />'
+        # 5. ANIMATION:
+        # Start: Nuværende beregnede position
+        # Slut: Spillerens position (IKKE banens slutning)
+        # Tid: Resterende tid
+        # Dette sikrer, at hastigheden (Distance / Tid) opdateres, når spilleren rykker sig.
+        monster_anim = f'<animateTransform attributeName="transform" type="translate" from="{monster_current_x} {monster_y_pos}" to="{player_base_x} {monster_y_pos}" dur="{time_left}s" fill="freeze" />'
         
     elif state_mode == 'DEATH':
-        monster_current_x = end_x 
+        monster_current_x = player_base_x # Skyggen står oven i spilleren
         monster_anim = ""
     elif state_mode == 'BRIEFING':
         monster_current_x = start_x
@@ -45,33 +59,29 @@ def render_game_scene(state_mode, progress, total_time, elapsed_time=0):
     else:
         return 
 
-    # Spillerens position
-    step_size = 100
-    player_base_x = 150 + (progress * step_size)
-    
+    # Spiller animation
     player_y_anim = ""
     player_opacity = "1.0"
     
     if state_mode == 'DEATH':
-        # Falde animation
         player_y_anim = '<animateTransform attributeName="transform" type="translate" from="0 0" to="0 300" dur="1s" fill="freeze" />'
         player_opacity = "0.8"
 
     # --- 3. BYG SVG ---
     
     html = f'<div style="width:100%; display:flex; justify-content:center; margin-bottom:20px;">'
-    html += f'<svg width="{scene_width}" height="350" style="background: radial-gradient(circle, #222 0%, #000 100%); border: 2px solid #444; border-radius: 10px;">'
+    html += f'<svg width="{scene_width}" height="350" style="background: radial-gradient(circle, {bg_center} 0%, {bg_edge} 100%); border: 2px solid #666; border-radius: 10px;">'
     
     # 1. BAGGRUND
     html += '<rect x="0" y="0" width="100%" height="100%" fill="none" />'
     
     # 2. START PLATFORM
-    html += f'<rect x="0" y="{ground_y}" width="100" height="150" fill="{platform_color}" stroke="#555" stroke-width="2"/>'
-    html += f'<text x="50" y="{ground_y + 40}" fill="#555" font-family="monospace" text-anchor="middle" font-size="12">START</text>'
+    html += f'<rect x="0" y="{ground_y}" width="100" height="150" fill="{platform_color}" stroke="#777" stroke-width="2"/>'
+    html += f'<text x="50" y="{ground_y + 40}" fill="#aaa" font-family="monospace" text-anchor="middle" font-size="12">START</text>'
 
     # 3. SLUT PLATFORM
-    html += f'<rect x="500" y="{ground_y}" width="100" height="150" fill="{platform_color}" stroke="#555" stroke-width="2"/>'
-    html += f'<text x="550" y="{ground_y + 40}" fill="#555" font-family="monospace" text-anchor="middle" font-size="12">SIKKERHED</text>'
+    html += f'<rect x="500" y="{ground_y}" width="100" height="150" fill="{platform_color}" stroke="#777" stroke-width="2"/>'
+    html += f'<text x="550" y="{ground_y + 40}" fill="#aaa" font-family="monospace" text-anchor="middle" font-size="12">SIKKERHED</text>'
 
     # 4. GLASBROEN
     html += f'<line x1="100" y1="{ground_y+5}" x2="500" y2="{ground_y+5}" stroke="{bridge_color}" stroke-width="4" />'
@@ -85,6 +95,7 @@ def render_game_scene(state_mode, progress, total_time, elapsed_time=0):
     html += '</g>'
 
     # 5. SPILLEREN (Stickman)
+    # Vi bruger en gruppe med transform, så vi nemt kan flytte hele manden
     html += f'<g transform="translate({player_base_x}, {ground_y - 50})" opacity="{player_opacity}">'
     html += player_y_anim
     html += '<circle cx="0" cy="0" r="12" fill="none" stroke="#00ff00" stroke-width="2" />'
@@ -97,13 +108,17 @@ def render_game_scene(state_mode, progress, total_time, elapsed_time=0):
     html += '</g>'
 
     # 6. SKYGGE MONSTERET
-    # Vi sætter start-positionen direkte i transform, så den står rigtigt før animationen kicker ind
+    # Monsteret bruger også en gruppe. 
+    # Vi sætter start-positionen direkte i transform
     html += f'<g transform="translate({monster_current_x}, {monster_y_pos})">'
     html += monster_anim
     
+    # Blob krop
     html += '<path d="M -20,0 Q -30,-40 0,-60 Q 30,-40 20,0 Q 10,20 -20,0" fill="black" filter="url(#glow)" opacity="0.9" />'
+    # Arme
     html += '<path d="M -15,-20 Q -40,-10 -30,10" stroke="black" stroke-width="3" fill="none" />'
     html += '<path d="M 15,-20 Q 40,-10 30,10" stroke="black" stroke-width="3" fill="none" />'
+    # Øjne
     html += '<circle cx="-8" cy="-35" r="4" fill="red"><animate attributeName="r" values="4;5;4" dur="0.5s" repeatCount="indefinite" /></circle>'
     html += '<circle cx="8" cy="-35" r="4" fill="red"><animate attributeName="r" values="4;5;4" dur="0.5s" repeatCount="indefinite" /></circle>'
     html += '</g>'
