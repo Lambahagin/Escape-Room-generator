@@ -1,85 +1,119 @@
 import streamlit as st
+import textwrap
 
 def render_game_scene(state_mode, progress, total_time, elapsed_time=0):
     """
-    Tegner spillets grafik.
+    Tegner spillets grafik med sprites og glasbro.
     """
     
-    # --- 1. BEREGNINGER ---
+    # --- 1. KONSTANTER & FARVER ---
+    bridge_color = "#00ffff"     # Neon cyan
+    platform_color = "#333333"   # Mørkegrå platforme
+    glass_color = "rgba(200, 255, 255, 0.2)" # Halvgennemsigtig glas
     
-    # Farver
-    player_color = "#00ff00" # Grøn
-    bridge_color = "cyan"
-    shadow_color = "black"
+    # Koordinater
+    scene_width = 600
+    ground_y = 200
     
-    # Dimensioner
-    start_x = 20
-    end_x = 250
-    dist = end_x - start_x
+    start_x = 50   # Monster start
+    end_x = 500    # Spiller start (og monster slut)
     
-    # Animation logik
-    shadow_cx_start = start_x
-    shadow_anim = ""
-    player_y_anim = "" 
+    # --- 2. BEREGN POSITIONER ---
     
-    if state_mode == 'PLAYING':
-        # Beregn hvor skyggen skal starte LIGE NU
-        if total_time > 0:
-            percent_done = elapsed_time / total_time
-            # Sikkerheds-tjek så den ikke går over 100%
-            percent_done = min(percent_done, 1.0)
-            
-            shadow_cx_start = start_x + (dist * percent_done)
-            time_left = max(0, total_time - elapsed_time)
-        else:
-            time_left = 0
-            
-        # Skyggen bevæger sig fra nuværende punkt til slutningen
-        shadow_anim = f'<animate attributeName="cx" from="{shadow_cx_start}" to="{end_x}" dur="{time_left}s" fill="freeze" />'
-        
+    # Monsterets position (Truslen)
+    if state_mode == 'PLAYING' and total_time > 0:
+        percent_done = min(elapsed_time / total_time, 1.0)
+        monster_x = start_x + ((end_x - start_x) * percent_done)
+        monster_anim = f'<animateTransform attributeName="transform" type="translate" from="{monster_x} 0" to="{end_x} 0" dur="{max(0, total_time - elapsed_time)}s" fill="freeze" />'
+        monster_start_pos = 0 # Vi bruger translate i animationen, så base er 0
     elif state_mode == 'DEATH':
-        shadow_cx_start = end_x # Skyggen har fanget dig
-        shadow_anim = "" 
-        # Falde-animation (y går fra 120 til 500)
-        player_y_anim = '<animate attributeName="cy" from="120" to="500" dur="1.5s" fill="freeze" />'
-    
+        monster_x = end_x 
+        monster_anim = ""
+        monster_start_pos = end_x
+    elif state_mode == 'BRIEFING':
+        monster_x = start_x
+        monster_anim = ""
+        monster_start_pos = start_x
     else:
-        return 
+        return # Ingen tegning
 
     # Spillerens position
-    player_x = 250 + (progress * 50)
+    # 3 trin på broen. Start = 450. Hvert skridt = +50px mod højre (mod sikkerhed)
+    # MEN vent, monster kommer fra venstre. Så spilleren flygter mod HØJRE.
+    # Lad os sige broen går fra x=100 til x=500.
+    
+    # Spiller starter ved x=150.
+    step_size = 100
+    player_base_x = 150 + (progress * step_size)
+    
+    player_y_anim = ""
+    player_opacity = 1.0
+    
+    if state_mode == 'DEATH':
+        # Falde animation
+        player_y_anim = '<animateTransform attributeName="transform" type="translate" from="0 0" to="0 300" dur="1s" fill="freeze" />'
+        player_opacity = 0.8 # Lidt mørkere når man falder
 
-    # --- 2. BYG HTML (LINJE FOR LINJE) ---
-    # Vi bygger strengen sådan her for at undgå indrykningsfejl
+    # --- 3. BYG SVG (TEGNINGEN) ---
     
-    svg = '<div style="width:100%; display:flex; justify-content:center; margin-bottom:20px;">'
-    svg += '<svg width="600" height="300" style="background-color:#222; border:4px solid #444; border-radius:15px;">'
+    svg = textwrap.dedent(f"""
+    <div style="width:100%; display:flex; justify-content:center; margin-bottom:20px;">
+        <svg width="{scene_width}" height="350" style="background: radial-gradient(circle, #222 0%, #000 100%); border: 2px solid #444; border-radius: 10px;">
+            
+            <rect x="0" y="0" width="100%" height="100%" fill="none" />
+            
+            <rect x="0" y="{ground_y}" width="100" height="150" fill="{platform_color}" stroke="#555" stroke-width="2"/>
+            <text x="50" y="{ground_y + 40}" fill="#555" font-family="monospace" text-anchor="middle" font-size="12">START</text>
+
+            <rect x="500" y="{ground_y}" width="100" height="150" fill="{platform_color}" stroke="#555" stroke-width="2"/>
+            <text x="550" y="{ground_y + 40}" fill="#555" font-family="monospace" text-anchor="middle" font-size="12">SIKKERHED</text>
+
+            <line x1="100" y1="{ground_y+5}" x2="500" y2="{ground_y+5}" stroke="{bridge_color}" stroke-width="4" />
+            <line x1="100" y1="{ground_y+35}" x2="500" y2="{ground_y+35}" stroke="{bridge_color}" stroke-width="4" />
+            
+            <g stroke="{bridge_color}" stroke-width="1" fill="{glass_color}">
+                <rect x="110" y="{ground_y+5}" width="80" height="30" />
+                <rect x="210" y="{ground_y+5}" width="80" height="30" />
+                <rect x="310" y="{ground_y+5}" width="80" height="30" />
+                <rect x="410" y="{ground_y+5}" width="80" height="30" />
+            </g>
+
+            <g transform="translate({player_base_x}, {ground_y - 50})" opacity="{player_opacity}">
+                {player_y_anim}
+                <circle cx="0" cy="0" r="12" fill="none" stroke="#00ff00" stroke-width="2" />
+                <line x1="0" y1="12" x2="0" y2="40" stroke="#00ff00" stroke-width="2" />
+                <line x1="0" y1="20" x2="-15" y2="35" stroke="#00ff00" stroke-width="2" />
+                <line x1="0" y1="20" x2="15" y2="35" stroke="#00ff00" stroke-width="2" />
+                <line x1="0" y1="40" x2="-10" y2="60" stroke="#00ff00" stroke-width="2" />
+                <line x1="0" y1="40" x2="10" y2="60" stroke="#00ff00" stroke-width="2" />
+                <text x="0" y="-15" fill="#00ff00" font-size="10" text-anchor="middle">456</text>
+            </g>
+
+            <g transform="translate({monster_start_pos}, {ground_y - 60})">
+                {monster_anim}
+                <path d="M -20,0 Q -30,-40 0,-60 Q 30,-40 20,0 Q 10,20 -20,0" fill="black" filter="url(#glow)" opacity="0.9" />
+                <path d="M -15,-20 Q -40,-10 -30,10" stroke="black" stroke-width="3" fill="none" />
+                <path d="M 15,-20 Q 40,-10 30,10" stroke="black" stroke-width="3" fill="none" />
+                <circle cx="-8" cy="-35" r="4" fill="red">
+                    <animate attributeName="r" values="4;5;4" dur="0.5s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="8" cy="-35" r="4" fill="red">
+                    <animate attributeName="r" values="4;5;4" dur="0.5s" repeatCount="indefinite" />
+                </circle>
+            </g>
+
+            <defs>
+                <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+                    <feMerge>
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+            </defs>
+
+        </svg>
+    </div>
+    """)
     
-    # Baggrund
-    svg += '<rect x="0" y="150" width="100%" height="150" fill="#111" />'
-    
-    # Broen
-    svg += f'<line x1="0" y1="150" x2="600" y2="150" stroke="{bridge_color}" stroke-width="2" />'
-    svg += f'<rect x="100" y="140" width="400" height="20" fill="{bridge_color}" opacity="0.3" />'
-    
-    # Skyggen
-    svg += '<g>'
-    svg += f'<circle cx="{shadow_cx_start}" cy="110" r="40" fill="{shadow_color}" opacity="0.9">{shadow_anim}</circle>'
-    # Røde øjne på skyggen
-    eye_anim = shadow_anim.replace('attributeName="cx"', f'attributeName="cx" values="{shadow_cx_start+10};{end_x+10}"') if shadow_anim else ""
-    svg += f'<circle cx="{shadow_cx_start + 10}" cy="100" r="5" fill="red">{eye_anim}</circle>'
-    svg += '</g>'
-    
-    # Spilleren
-    svg += '<g>'
-    svg += f'<circle cx="{player_x}" cy="120" r="20" fill="{player_color}" stroke="white" stroke-width="3">{player_y_anim}</circle>'
-    svg += f'<text x="{player_x}" y="125" font-size="10" text-anchor="middle" fill="black" font-weight="bold">456</text>'
-    svg += '</g>'
-    
-    # Advarselstekst
-    svg += '<text x="20" y="30" fill="white" font-family="monospace" font-size="16">⚠️ TRUSSEL NÆRMER SIG</text>'
-    
-    svg += '</svg></div>'
-    
-    # Vis det som rå HTML
     st.markdown(svg, unsafe_allow_html=True)
