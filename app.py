@@ -21,7 +21,6 @@ st.markdown("""
     }
     div[data-testid="stToolbar"] button { color: white !important; }
 
-    /* Knapper */
     div.stButton > button {
         width: 100%; height: 60px; background-color: #111111;
         color: #00ff00; border: 2px solid #00ff00;
@@ -44,7 +43,7 @@ defaults = {
     'progress': 0, 
     'start_time': 0, 
     'msg': "",
-    'monster_anchor': 50  # Hvor starter monsteret animationen fra i dette øjeblik?
+    'monster_anchor': 0  # Start ved 0
 }
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
@@ -67,7 +66,7 @@ if st.session_state.mode == 'MENU':
             st.session_state.progress = 0
             st.session_state.lives = 3
             st.session_state.msg = ""
-            st.session_state.monster_anchor = 50 # Reset monster
+            st.session_state.monster_anchor = 0 # Reset monster
             st.rerun()
 
 elif st.session_state.mode == 'BRIEFING':
@@ -75,7 +74,7 @@ elif st.session_state.mode == 'BRIEFING':
     st.title("📁 MISSION BRIEFING")
     
     # Vis statisk scene
-    graphics.render_game_scene('BRIEFING', 0, room['time_limit'], 0, 50)
+    graphics.render_game_scene('BRIEFING', 0, room['time_limit'], 0, 0)
     
     st.info(f"**HISTORIE:** {room['story']}")
     st.warning(f"⚠️ Tid: {room['time_limit']} sekunder.")
@@ -83,7 +82,7 @@ elif st.session_state.mode == 'BRIEFING':
     if st.button("JEG ER KLAR - START SPIL", use_container_width=True):
         st.session_state.mode = 'PLAYING'
         st.session_state.start_time = time.time()
-        st.session_state.monster_anchor = 50 # Sikre start position
+        st.session_state.monster_anchor = 0 # Sikre start position
         st.rerun()
 
 elif st.session_state.mode == 'PLAYING':
@@ -102,7 +101,7 @@ elif st.session_state.mode == 'PLAYING':
     lives_icon = "❤️" * st.session_state.lives
     st.markdown(f"""<div class="status-bar">LIV: {lives_icon} &nbsp;|&nbsp; TRIN: {idx+1}/{len(steps)}</div>""", unsafe_allow_html=True)
 
-    # Grafik: Vi sender 'monster_anchor' med, så den ved hvor den kom fra
+    # Grafik
     graphics.render_game_scene('PLAYING', idx, room['time_limit'], elapsed, st.session_state.monster_anchor)
     
     if idx < len(steps):
@@ -114,21 +113,23 @@ elif st.session_state.mode == 'PLAYING':
         
         # Funktion til at håndtere svar og opdatere monster position
         def handle_answer(choice):
-            # Beregn hvor monsteret er LIGE NU, før vi opdaterer
-            # Position = Start + (Distance * Procent)
-            start_x = 50
-            target_x = 150 + (st.session_state.progress * 100)
-            dist = target_x - start_x
+            # 1. BEREGN MONSTERETS NUÆRENDE POSITION *FØR* VI FLYTTER SPILLEREN
+            start_x = 0
+            # Hvor er spilleren LIGE NU?
+            current_player_x = 150 + (st.session_state.progress * 100)
+            
+            dist = current_player_x - start_x
             pct = min(elapsed / room['time_limit'], 1.0)
             
             current_monster_x = start_x + (dist * pct)
             
             if choice == q['correct']:
+                # 2. GEM POSITIONEN
+                st.session_state.monster_anchor = current_monster_x
+                
+                # 3. FLYT SPILLEREN
                 st.session_state.progress += 1
                 st.session_state.msg = "✅ Korrekt!"
-                # VIGTIGT: Vi gemmer monsterets nuværende position som nyt anker
-                # Så hopper den ikke, men fortsætter derfra mod det nye mål
-                st.session_state.monster_anchor = current_monster_x
             else:
                 st.session_state.mode = 'DEATH'
                 st.session_state.msg = "❌ Forkert!"
@@ -160,11 +161,11 @@ elif st.session_state.mode == 'DEATH':
             st.session_state.mode = 'PLAYING'
             st.session_state.progress = 0 
             st.session_state.start_time = time.time()
-            st.session_state.monster_anchor = 50 # RESET MONSTER TIL START
+            st.session_state.monster_anchor = 0 # RESET MONSTER TIL 0
             st.session_state.msg = ""
         st.rerun()
 
 st.markdown("---")
-if st.button("🔧 REBOOT APP (Hvis noget driller)"):
+if st.button("🔧 REBOOT APP"):
     st.session_state.clear()
     st.rerun()
