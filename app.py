@@ -10,21 +10,14 @@ st.markdown("""
 <style>
     .stApp { background-color: #000000 !important; color: #ffffff !important; }
     p, h1, h2, h3, li, .stMarkdown, .stCaption { color: #ffffff !important; }
-    
-    /* Knapper */
     div.stButton > button {
         width: 100%; height: 60px; background-color: #111111;
         color: #00ff00; border: 2px solid #00ff00;
         font-size: 20px; font-weight: bold; transition: 0.3s;
     }
-    div.stButton > button:hover {
-        background-color: #003300; border-color: #ffffff; color: #ffffff;
-    }
-    
-    /* Status bar */
+    div.stButton > button:hover { background-color: #003300; border-color: #ffffff; color: #ffffff; }
     .status-bar {
-        padding: 10px; border-bottom: 2px solid #333;
-        margin-bottom: 20px; font-family: monospace; font-size: 18px;
+        padding: 10px; border-bottom: 2px solid #333; margin-bottom: 20px; font-family: monospace; font-size: 18px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -36,15 +29,12 @@ for k, v in defaults.items():
 
 # --- 3. LOGIK ---
 
-# --- MENU ---
 if st.session_state.mode == 'MENU':
     st.title("💀 SUMVIVAL GAME")
     st.write("Systemet er klar. Vælg parametre.")
-    
     c1, c2 = st.columns(2)
     fag = c1.selectbox("Fag", ["Matematik", "Fysik"])
     emne = c2.text_input("Emne", "Funktioner")
-    
     st.markdown("<br>", unsafe_allow_html=True)
     
     if st.button("HENT MISSION", use_container_width=True):
@@ -57,23 +47,18 @@ if st.session_state.mode == 'MENU':
             st.session_state.msg = ""
             st.rerun()
 
-# --- BRIEFING ---
 elif st.session_state.mode == 'BRIEFING':
     room = st.session_state.scenario['rooms'][0]
-    
     st.title("📁 MISSION BRIEFING")
-    
     graphics.render_game_scene('BRIEFING', 0, room['time_limit'], 0)
-    
     st.info(f"**HISTORIE:** {room['story']}")
-    st.warning(f"⚠️ Du har {room['time_limit']} sekunder til at krydse broen, før skyggen fanger dig.")
+    st.warning(f"⚠️ Du har {room['time_limit']} sekunder til at krydse broen.")
     
     if st.button("JEG ER KLAR - START SPIL", use_container_width=True):
         st.session_state.mode = 'PLAYING'
         st.session_state.start_time = time.time()
         st.rerun()
 
-# --- PLAYING ---
 elif st.session_state.mode == 'PLAYING':
     room = st.session_state.scenario['rooms'][0]
     steps = room['steps']
@@ -82,13 +67,14 @@ elif st.session_state.mode == 'PLAYING':
     elapsed = time.time() - st.session_state.start_time
     time_left = max(0, room['time_limit'] - elapsed)
     
+    # Tidsstyring
     if elapsed > room['time_limit']:
         st.session_state.mode = 'DEATH'
         st.session_state.msg = "TIDEN UDLØB! Skyggen fik dig."
         st.rerun()
 
+    # HUD (Uden tid)
     lives_icon = "❤️" * st.session_state.lives
-    # Opdateret status bar UDEN tid
     st.markdown(f"""<div class="status-bar">LIV: {lives_icon} &nbsp;|&nbsp; TRIN: {idx+1}/{len(steps)}</div>""", unsafe_allow_html=True)
 
     # Grafik
@@ -126,10 +112,12 @@ elif st.session_state.mode == 'PLAYING':
             st.session_state.mode = 'MENU'
             st.rerun()
 
-# --- DEATH ---
 elif st.session_state.mode == 'DEATH':
     st.error(f"💀 {st.session_state.msg}")
+    
+    # Vi sender 'DEATH' til grafikken, hvilket skal trigger fald-animationen
     graphics.render_game_scene('DEATH', st.session_state.progress, 1)
+    
     st.markdown("# DU DØDE")
     if st.button(f"PRØV IGEN (-1 Liv)", use_container_width=True):
         st.session_state.lives -= 1
