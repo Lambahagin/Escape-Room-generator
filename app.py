@@ -9,12 +9,7 @@ st.markdown("""
 <style>
     .stApp { background-color: #000000 !important; color: #ffffff !important; }
     p, h1, h2, h3, li, .stMarkdown, .stCaption { color: #ffffff !important; }
-    /* Knapper */
-    div.stButton > button {
-        width: 100%; height: 60px; background-color: #111111;
-        color: #00ff00; border: 2px solid #00ff00;
-        font-size: 20px; font-weight: bold; transition: 0.3s;
-    }
+    div.stButton > button { width: 100%; height: 60px; background-color: #111111; color: #00ff00; border: 2px solid #00ff00; font-size: 20px; font-weight: bold; transition: 0.3s; }
     div.stButton > button:hover { background-color: #003300; border-color: #ffffff; color: #ffffff; }
     .status-bar { padding: 10px; border-bottom: 2px solid #333; margin-bottom: 20px; font-family: monospace; font-size: 18px; }
 </style>
@@ -22,29 +17,39 @@ st.markdown("""
 
 defaults = {
     'mode': 'MENU', 'scenario': None, 'lives': 3, 'progress': 0, 
-    'start_time': 0, 'msg': "", 'monster_anchor': 0, 'last_update_time': 0
+    'start_time': 0, 'msg': "", 'monster_anchor': 50, 'last_update_time': 0
 }
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
 
-# --- LOGIK ---
-
-# Hjælpefunktion til monster position
-def calculate_current_monster_x(total_time, elapsed):
+# --- BEREGN ANKER (VIGTIGSTE FUNKTION) ---
+def get_current_monster_pos(total_time, current_progress):
+    """Finder hvor monsteret er LIGE NU, så vi kan starte næste animation derfra."""
+    
+    # 1. Hvor startede den sidst?
     start_x = st.session_state.monster_anchor
-    target_x = 150 + (st.session_state.progress * 100)
-    step_elapsed = time.time() - st.session_state.last_update_time
+    
+    # 2. Hvor var den på vej hen (Spillerens position FØR han rykkede)?
+    target_x = 150 + (current_progress * 100)
+    
+    # 3. Hvor lang tid har den haft til at bevæge sig siden sidste update?
+    time_spent = time.time() - st.session_state.last_update_time
+    
+    # 4. Hvor lang tid var der tilbage totalt da denne bevægelse startede?
+    # (Total tid - tid der var gået ved sidste update)
     time_left_at_start = total_time - (st.session_state.last_update_time - st.session_state.start_time)
     
-    if time_left_at_start <= 0: return target_x
+    if time_left_at_start <= 0.1: return target_x # Den er fremme
     
-    pct = min(step_elapsed / time_left_at_start, 1.0)
-    dist = target_x - start_x
-    return start_x + (dist * pct)
+    # 5. Procentdel af rejsen
+    pct = min(time_spent / time_left_at_start, 1.0)
+    
+    # 6. Nuværende position
+    current_x = start_x + ((target_x - start_x) * pct)
+    return current_x
 
 if st.session_state.mode == 'MENU':
     st.title("💀 SUMVIVAL GAME")
-    st.write("Systemet er klar.")
     c1, c2 = st.columns(2)
     fag = c1.selectbox("Fag", ["Matematik", "Fysik"])
     emne = c2.text_input("Emne", "Funktioner")
@@ -58,22 +63,22 @@ if st.session_state.mode == 'MENU':
             st.session_state.progress = 0
             st.session_state.lives = 3
             st.session_state.msg = ""
-            st.session_state.monster_anchor = 0
+            st.session_state.monster_anchor = 50
             st.rerun()
 
 elif st.session_state.mode == 'BRIEFING':
     room = st.session_state.scenario['rooms'][0]
     st.title("📁 MISSION BRIEFING")
-    graphics.render_game_scene('BRIEFING', 0, 20, 0, 0)
-    st.info(f"**HISTORIE:** {room['story']}")
-    st.warning("⚠️ 20 sekunder til at overleve.")
+    graphics.render_game_scene('BRIEFING', 0, room['time_limit'], 0, 50)
+    st.info(f"{room['story']}")
+    st.warning(f"⚠️ Tid: {room['time_limit']} sekunder. 4 Spørgsmål.")
     
     if st.button("JEG ER KLAR - START SPIL", use_container_width=True):
         st.session_state.mode = 'PLAYING'
         now = time.time()
         st.session_state.start_time = now
         st.session_state.last_update_time = now
-        st.session_state.monster_anchor = 0 
+        st.session_state.monster_anchor = 50 
         st.rerun()
 
 elif st.session_state.mode == 'PLAYING':
@@ -84,35 +89,35 @@ elif st.session_state.mode == 'PLAYING':
     elapsed = time.time() - st.session_state.start_time
     time_left = max(0, room['time_limit'] - elapsed)
     
-    # Tjek tid (Visuelt fallback)
+    # Tidsstyring ved klik
     if elapsed > room['time_limit']:
         st.session_state.mode = 'DEATH'
         st.session_state.msg = "TIDEN ER UDLØBET!"
         st.rerun()
 
     lives_icon = "❤️" * st.session_state.lives
-    st.markdown(f"""<div class="status-bar">LIV: {lives_icon} &nbsp;|&nbsp; TRIN: {idx+1}/{len(steps)}</div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div class="status-bar">LIV: {lives_icon} &nbsp;|&nbsp; TRIN: {idx+1}/4</div>""", unsafe_allow_html=True)
 
     graphics.render_game_scene('PLAYING', idx, room['time_limit'], elapsed, st.session_state.monster_anchor)
     
     if idx < len(steps):
         q = steps[idx]
         st.markdown(f"### ❓ {q['q']}")
-        
+        if st.session_state.msg: st.caption(st.session_state.msg)
+
         c1, c2 = st.columns(2)
         
         def answer(opt):
-            # --- SIKKERHEDSTJEK: ER TIDEN GÅET? ---
-            # Dette forhindrer spilleren i at klikke efter døden
+            # Tjek tid igen for en sikkerheds skyld
             real_elapsed = time.time() - st.session_state.start_time
             if real_elapsed > room['time_limit']:
                 st.session_state.mode = 'DEATH'
-                st.session_state.msg = "For sent! Du tøvede."
-                return # Stop funktionen her, giv ikke point!
+                st.session_state.msg = "For sent!"
+                return
 
-            # Hvis tiden er god, beregn animation
-            current_pos = calculate_current_monster_x(room['time_limit'], elapsed)
-            st.session_state.monster_anchor = current_pos
+            # Opdater monster anker (FØR vi ændrer progress)
+            new_anchor = get_current_monster_pos(room['time_limit'], st.session_state.progress)
+            st.session_state.monster_anchor = new_anchor
             st.session_state.last_update_time = time.time()
             
             if opt == q['correct']:
@@ -131,8 +136,8 @@ elif st.session_state.mode == 'PLAYING':
             
     else:
         st.balloons()
-        st.success("DU KLAREDE DET!")
-        if st.button("Menu"):
+        st.success("DU NÅEDE SIKKERHED!")
+        if st.button("Tilbage til Menu"):
             st.session_state.mode = 'MENU'
             st.rerun()
 
@@ -150,7 +155,7 @@ elif st.session_state.mode == 'DEATH':
             now = time.time()
             st.session_state.start_time = now
             st.session_state.last_update_time = now
-            st.session_state.monster_anchor = 0 
+            st.session_state.monster_anchor = 50 # RESET HELT
             st.session_state.msg = ""
         st.rerun()
 
