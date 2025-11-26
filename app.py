@@ -93,9 +93,9 @@ elif st.session_state.mode == 'PLAYING':
     # HUD
     lives_icon = "❤️" * st.session_state.lives
     st.markdown(f"""<div class="status-bar">LIV: {lives_icon} &nbsp;|&nbsp; TID: {int(time_left)}s &nbsp;|&nbsp; TRIN: {idx+1}/{len(steps)}</div>""", unsafe_allow_html=True)
-
-    # Grafik
-    graphics.render_game_scene('PLAYING', idx, room['time_limit'])
+    
+    # Grafik - NU MED ELAPSED TIME
+    graphics.render_game_scene('PLAYING', idx, room['time_limit'], elapsed)
     
     # Spørgsmål (Vises kun her, ikke i briefing)
     if idx < len(steps):
