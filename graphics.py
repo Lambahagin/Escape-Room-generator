@@ -2,8 +2,7 @@ import streamlit as st
 
 def render_game_scene(state_mode, progress, total_time, elapsed_time, monster_anchor_x=0):
     """
-    Tegner spillets grafik. Version 8.0 - SVG Chaining.
-    Animationer afløser hinanden automatisk uden Python-reload.
+    Version 9.0 - Fixet Døds-position.
     """
     
     # --- 1. KONSTANTER ---
@@ -12,66 +11,53 @@ def render_game_scene(state_mode, progress, total_time, elapsed_time, monster_an
     monster_y = ground_y - 60
     player_y = ground_y - 50
     
-    step_size = 100         
-    
-    # Beregn spillerens position (Målet)
-    # Vi starter spilleren ved 150. Trin 0 = 150.
+    step_size = 100
+    # Beregn hvor spilleren står LIGE NU (uanset om han lever eller dør)
     target_player_x = 150 + (progress * step_size)
     
-    # --- 2. ANIMATIONS LOGIK ---
-    
+    # --- 2. ANIMATION ---
     monster_anim = ""
-    player_anim = "" # Her styrer vi faldet
-    
-    # Hvor starter monsteret denne gang?
     initial_monster_x = monster_anchor_x
     
-    if state_mode == 'PLAYING':
-        # Beregn rest-tid
-        time_left = max(0, total_time - elapsed_time)
-        
-        if time_left > 0:
-            # 1. MONSTER ANIMATION (Jagt)
-            # Vi giver den 'id="hunt"' så vi kan henvise til den
-            monster_anim = f'<animateTransform id="hunt" attributeName="transform" type="translate" from="{initial_monster_x} {monster_y}" to="{target_player_x} {monster_y}" dur="{time_left}s" fill="freeze" />'
-            
-            # 2. SPILLER ANIMATION (Auto-død)
-            # Denne starter KUN når 'hunt' er færdig (begin="hunt.end")
-            player_anim = '<animateTransform attributeName="transform" type="translate" from="0 0" to="0 300" begin="hunt.end" dur="0.5s" fill="freeze" />'
-        else:
-            # Tiden er allerede gået -> Monster står ved spiller
-            initial_monster_x = target_player_x
-            monster_anim = ""
-            # Spiller falder med det samme
-            player_anim = '<animateTransform attributeName="transform" type="translate" from="0 0" to="0 300" begin="0s" dur="0.5s" fill="freeze" />'
-        
-    elif state_mode == 'DEATH':
-        # Spilleren døde pga forkert svar -> Monster står ved spilleren
-        initial_monster_x = target_player_x
-        monster_anim = ""
-        
-        # Spiller falder med det samme (Straf)
-        player_anim = '<animateTransform attributeName="transform" type="translate" from="0 0" to="0 300" begin="0s" dur="0.5s" fill="freeze" />'
-        
-    elif state_mode == 'BRIEFING':
-        initial_monster_x = 0 # Start platform
-        monster_anim = ""
-    else:
-        return 
-
-    # --- 3. BYG SVG ---
+    # Spiller (Default: Ingen animation)
+    player_transform_anim = ""
+    player_opacity = "1.0"
     
+    if state_mode == 'PLAYING':
+        time_left = max(0, total_time - elapsed_time)
+        if time_left > 0:
+            # Monster jagter fra anker til spiller
+            monster_anim = f'<animateTransform attributeName="transform" type="translate" from="{initial_monster_x} {monster_y}" to="{target_player_x} {monster_y}" dur="{time_left}s" fill="freeze" />'
+        else:
+            # Tiden er gået -> Monster er fremme
+            initial_monster_x = target_player_x
+            
+    elif state_mode == 'DEATH':
+        # Monster står ved spilleren
+        initial_monster_x = target_player_x
+        monster_anim = "" 
+        
+        # Spiller falder (Vi bruger relative koordinater i animationen)
+        # from="0 0" betyder "fra der hvor gruppen er (target_player_x)"
+        player_transform_anim = '<animateTransform attributeName="transform" type="translate" from="0 0" to="0 300" begin="0s" dur="1s" fill="freeze" />'
+        player_opacity = "0.6"
+
+    elif state_mode == 'BRIEFING':
+        initial_monster_x = 0
+        monster_anim = ""
+
+    # --- 3. BYG HTML ---
     html = f'<div style="width:100%; display:flex; justify-content:center; margin-bottom:20px;">'
     html += f'<svg width="{scene_width}" height="350" style="background: radial-gradient(circle, #444 0%, #111 100%); border: 2px solid #666; border-radius: 10px;">'
     
-    # BAGGRUND
+    # Baggrund
     html += '<rect x="0" y="0" width="100%" height="100%" fill="none" />'
     html += f'<rect x="0" y="{ground_y}" width="100" height="150" fill="#555" stroke="#777" stroke-width="2"/>'
     html += f'<text x="50" y="{ground_y + 40}" fill="#aaa" font-family="monospace" text-anchor="middle" font-size="12">START</text>'
     html += f'<rect x="500" y="{ground_y}" width="100" height="150" fill="#555" stroke="#777" stroke-width="2"/>'
     html += f'<text x="550" y="{ground_y + 40}" fill="#aaa" font-family="monospace" text-anchor="middle" font-size="12">SIKKERHED</text>'
 
-    # BROEN
+    # Broen
     html += f'<line x1="100" y1="{ground_y+5}" x2="500" y2="{ground_y+5}" stroke="#00ffff" stroke-width="4" />'
     html += f'<line x1="100" y1="{ground_y+35}" x2="500" y2="{ground_y+35}" stroke="#00ffff" stroke-width="4" />'
     html += f'<g stroke="#00ffff" stroke-width="1" fill="rgba(200, 255, 255, 0.2)">'
@@ -80,8 +66,10 @@ def render_game_scene(state_mode, progress, total_time, elapsed_time, monster_an
     html += '</g>'
 
     # SPILLEREN
-    html += f'<g transform="translate({target_player_x}, {player_y})">'
-    html += player_anim  # Her indsættes den betingede animation
+    # Vi placerer gruppen ved target_player_x.
+    # Ved død falder den ned derfra (pga. animationen).
+    html += f'<g transform="translate({target_player_x}, {player_y})" opacity="{player_opacity}">'
+    html += player_transform_anim
     html += '<circle cx="0" cy="0" r="12" fill="none" stroke="#00ff00" stroke-width="2" />'
     html += '<line x1="0" y1="12" x2="0" y2="40" stroke="#00ff00" stroke-width="2" />'
     html += '<line x1="0" y1="20" x2="-15" y2="35" stroke="#00ff00" stroke-width="2" />'
@@ -92,6 +80,7 @@ def render_game_scene(state_mode, progress, total_time, elapsed_time, monster_an
     html += '</g>'
 
     # MONSTER
+    # Monsteret bruger transform til at flytte sig (eller stå stille)
     html += f'<g transform="translate({initial_monster_x}, {monster_y})">'
     html += monster_anim
     html += '<path d="M -20,0 Q -30,-40 0,-60 Q 30,-40 20,0 Q 10,20 -20,0" fill="black" filter="url(#glow)" opacity="0.95" />'
