@@ -4,7 +4,7 @@ import json
 def render_js_game(scenario_json):
     """
     Genererer HTML/JS spil.
-    Version: Death Animation & Sound Effects
+    Version: Perfect Timing & Sound Control
     """
     game_data = json.dumps(scenario_json)
     
@@ -28,10 +28,12 @@ def render_js_game(scenario_json):
         /* Animationer */
         @keyframes shatter {{
             0% {{ fill: rgba(0,255,255,0.2); }}
-            50% {{ fill: white; }}
+            20% {{ fill: white; opacity: 0.8; }}
             100% {{ opacity: 0; }}
         }}
-        .shattering {{ animation: shatter 0.2s forwards; }}
+        .shattering {{ animation: shatter 0.3s forwards; }}
+        
+        .panel-normal {{ fill: rgba(0,255,255,0.2); stroke: cyan; stroke-width: 1; }}
     </style>
     </head>
     <body>
@@ -128,28 +130,41 @@ def render_js_game(scenario_json):
         const sfxScream = document.getElementById('sfx-scream');
         const sfxWin = document.getElementById('sfx-win');
 
-        // Initialiser paneler
+        // 1. Initialiser paneler
         let panels = [];
         for(let i=0; i<4; i++) {{
             let rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            // Beregning af panel positioner:
+            // Panel 1 start: 110. Bredde 80. Center = 150.
+            // Panel 2 start: 210. Bredde 80. Center = 250.
             rect.setAttribute("x", 110 + (i*100));
             rect.setAttribute("y", 205);
             rect.setAttribute("width", 80);
             rect.setAttribute("height", 30);
-            rect.setAttribute("fill", "rgba(0,255,255,0.2)");
-            rect.setAttribute("stroke", "cyan");
-            rect.setAttribute("stroke-width", "1");
+            rect.setAttribute("class", "panel-normal");
             panelsGroup.appendChild(rect);
             panels.push(rect);
         }}
 
+        // Hjælpefunktion til at stoppe lyde
+        function stopSounds() {{
+            [sfxGlass, sfxScream, sfxWin].forEach(s => {{
+                s.pause();
+                s.currentTime = 0;
+            }});
+        }}
+
         function startGame() {{
+            stopSounds(); // STOP GAMLE SKRIG
+            
             currentStep = 0;
             isPlaying = true;
             timeRemaining = totalTime;
             lastFrameTime = performance.now();
             
-            playerX = 50;
+            // Start Position: Hop direkte ud på første panel!
+            // Start platform er x=50. Første panel center er x=150.
+            playerX = 150; 
             monsterX = -70; 
             updatePositions();
             
@@ -168,6 +183,7 @@ def render_js_game(scenario_json):
         }}
 
         function restartLevel() {{
+            stopSounds();
             lives--;
             if (lives <= 0) {{
                 alert("GAME OVER - Du skal genstarte spillet.");
@@ -189,14 +205,10 @@ def render_js_game(scenario_json):
             btn1.style.display = "block";
             btn2.style.display = "block";
             
-            // Flyt spiller til FORRIGE sikre position
-            // Start: 50. Panel 1: 150. Panel 2: 250...
-            // Hvis vi er på step 0, står vi på 50.
-            // Hvis vi er på step 1, står vi på 150 (midten af panel 1).
-            
-            playerX = 50 + (currentStep * 100);
-            if (currentStep > 0) playerX += 50;
-            
+            // Opdater spiller position (allerede sat i checkAnswer eller startGame)
+            // Vi sikrer os bare at den passer
+            let targetX = 150 + (currentStep * 100);
+            playerX = targetX;
             updatePositions();
         }}
 
@@ -214,62 +226,58 @@ def render_js_game(scenario_json):
             let q = steps[currentStep];
             let choice = q.options[optionIdx];
 
-            // Deaktiver knapper midlertidigt for effekt
             enableButtons(false);
 
             if (choice === q.correct) {{
-                // KORREKT: Hop til næste panel sikkert
+                // KORREKT: Hop til næste panel
                 currentStep++;
-                showQuestion(); // Flytter spilleren visuelt i showQuestion
-                enableButtons(true);
-            }} else {{
-                // FORKERT: Hop ud på panelet og DØ
-                
-                // 1. Beregn hvor spilleren hopper hen (Det forkerte panel)
-                // Det er panelet svarende til currentStep
-                let targetPanelX = 150 + (currentStep * 100);
-                
-                // Flyt spiller visuelt
-                playerX = targetPanelX;
+                // Hvis vi er færdige (step 4), hopper vi til safety (550), ellers næste panel
+                if (currentStep < 4) {{
+                    playerX = 150 + (currentStep * 100);
+                }} else {{
+                    playerX = 550; // Safety
+                }}
                 updatePositions();
+                showQuestion(); 
+                enableButtons(true);
                 
-                // 2. Vent et øjeblik (Suspense...)
+            }} else {{
+                // FORKERT: Dødsproces
+                // Vi står allerede på det "forkerte" panel (fordi vi hopper derud ved start/forrige svar)
+                
+                // 1. Vent lille øjeblik (Suspense)
                 setTimeout(() => {{
                     breakGlassAndDie("Forkert svar!");
-                }}, 600);
+                }}, 300);
             }}
         }}
 
         function breakGlassAndDie(reason) {{
-            // Find det aktuelle panel
             let panel = panels[currentStep];
             
-            // 1. Visuel splintring
+            // 1. Visuel splintring & Lyd
             if(panel) {{
                 panel.classList.add('shattering');
+                sfxGlass.play().catch(e => console.log("Audio error:", e));
             }}
             
-            // 2. Lyd
-            sfxGlass.currentTime = 0;
-            sfxGlass.play();
-            
+            // 2. Fald & Skrig (lidt forsinket for at matche glasbrud)
             setTimeout(() => {{
-                sfxScream.currentTime = 0;
-                sfxScream.play();
+                sfxScream.play().catch(e => console.log("Audio error:", e));
                 
-                // 3. Fald ned
-                playerEl.setAttribute('transform', `translate(${{playerX}}, 450)`); // Drop langt ned
+                // Fald animation
+                playerEl.setAttribute('transform', `translate(${{playerX}}, 450)`); 
                 
-                // 4. Game Over skærm
+                // 3. Game Over skærm
                 setTimeout(() => {{
                     playerDie(reason);
-                }}, 1000);
+                }}, 1500);
                 
-            }}, 200); // Lille forsinkelse før fald
+            }}, 400); 
         }}
 
         function updatePositions() {{
-            // Simpel direkte opdatering (ingen fald her)
+            // Direkte opdatering
             if (isPlaying) {{
                 playerEl.setAttribute('transform', `translate(${{playerX}}, 150)`);
             }}
@@ -285,7 +293,7 @@ def render_js_game(scenario_json):
             timeRemaining -= dt;
             timeEl.innerText = `TID: ${{Math.max(0, timeRemaining).toFixed(1)}}s`;
 
-            // Monster Movement (Fysik)
+            // Monster Jagt
             let targetX = playerX;
             let distance = targetX - monsterX;
             let safeTime = Math.max(timeRemaining, 0.01);
@@ -293,13 +301,10 @@ def render_js_game(scenario_json):
             
             monsterX += speed * dt;
             
-            // Opdater kun monster her, spiller opdateres ved svar
             monsterEl.setAttribute('transform', `translate(${{monsterX}}, 140)`);
 
-            // Tjek død ved tid
-            if (timeRemaining <= 0 || monsterX >= (playerX - 5)) {{
-                // Tiden gik -> Monster fangede dig
-                // Her falder glasset ikke, man bliver bare "taget"
+            // Tjek tid/fangst (Giv lidt buffer på 10px)
+            if (timeRemaining <= 0 || monsterX >= (playerX - 10)) {{
                 playerDie("Skyggen fangede dig!");
             }} else {{
                 requestAnimationFrame(gameLoop);
@@ -317,6 +322,7 @@ def render_js_game(scenario_json):
 
         function winGame() {{
             isPlaying = false;
+            stopSounds();
             sfxWin.play();
             overlay.style.display = "flex";
             overlayText.innerText = "RUM KLARET!";
