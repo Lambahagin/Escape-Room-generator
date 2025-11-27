@@ -4,7 +4,7 @@ import json
 def render_js_game(scenario_json):
     """
     Genererer HTML/JS spil.
-    Version: Instant Fall & Volume Boost
+    Version: 14.0 - Full Physics Engine (Gravity implemented in JS Loop)
     """
     game_data = json.dumps(scenario_json)
     
@@ -25,7 +25,7 @@ def render_js_game(scenario_json):
         .overlay-msg {{ font-size: 30px; color: red; margin-bottom: 20px; text-align: center; }}
         .code-box {{ font-size: 24px; color: lime; border: 2px dashed lime; padding: 10px; margin-top: 10px; user-select: text; }}
         
-        /* Animationer */
+        /* Kun animation til glasset */
         @keyframes shatter {{
             0% {{ fill: rgba(0,255,255,0.2); opacity: 1; }}
             20% {{ fill: white; opacity: 0.8; }}
@@ -34,17 +34,11 @@ def render_js_game(scenario_json):
         .shattering {{ animation: shatter 0.2s forwards; }}
         
         .panel-normal {{ fill: rgba(0,255,255,0.2); stroke: cyan; stroke-width: 1; }}
-        
-        /* Fald animation (CSS Class trigger) */
-        .falling {{
-            transition: transform 1s ease-in;
-            transform: translate(0px, 300px) !important; /* Relativt drop */
-        }}
     </style>
     </head>
     <body>
 
-    <audio id="sfx-glass" src="https://www.soundjay.com/misc/sounds/glass-break-2.mp3" preload="auto"></audio>
+    <audio id="sfx-glass" src="https://www.myinstants.com/media/sounds/minecraft-glass-break.mp3" preload="auto"></audio>
     <audio id="sfx-scream" src="https://www.soundjay.com/human/sounds/man-scream-01.mp3" preload="auto"></audio>
     <audio id="sfx-win" src="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3" preload="auto"></audio>
 
@@ -111,10 +105,18 @@ def render_js_game(scenario_json):
         let currentStep = 0;
         let lives = 3;
         let isPlaying = false;
+        
+        // FYSICS VARIABLES
         let playerX = 50;
+        let playerY = 150; // Ny variabel: Vertikal position
+        let playerVelocityY = 0; // Fald hastighed
+        let gravity = 800; // Pixels per sekund^2 (Hvor hurtigt han accelererer ned)
+        
         let monsterX = -70; 
         let timeRemaining = totalTime;
         let lastFrameTime = 0;
+        
+        let isFalling = false; 
 
         // Refs
         const playerEl = document.getElementById('player');
@@ -135,11 +137,9 @@ def render_js_game(scenario_json):
         const sfxScream = document.getElementById('sfx-scream');
         const sfxWin = document.getElementById('sfx-win');
 
-        // Lyd med tvungen volumen
         function playSoundSnippet(audioElement, durationMs) {{
-            audioElement.volume = 1.0; // Skru helt op
+            audioElement.volume = 1.0;
             audioElement.currentTime = 0;
-            
             let playPromise = audioElement.play();
             if (playPromise !== undefined) {{
                 playPromise.then(_ => {{
@@ -149,11 +149,11 @@ def render_js_game(scenario_json):
                             audioElement.currentTime = 0;
                         }}, durationMs);
                     }}
-                }}).catch(error => console.log("Audio prevented"));
+                }}).catch(error => console.log("Audio blocked"));
             }}
         }}
 
-        // Init
+        // Init Paneler
         let panels = [];
         for(let i=0; i<4; i++) {{
             let rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -177,11 +177,16 @@ def render_js_game(scenario_json):
             stopSounds();
             currentStep = 0;
             isPlaying = true;
+            isFalling = false;
             timeRemaining = totalTime;
             lastFrameTime = performance.now();
             
+            // RESET FYSICS
             playerX = 150; 
+            playerY = 150; 
+            playerVelocityY = 0;
             monsterX = -70; 
+            
             updatePositions();
             
             panels.forEach(p => {{
@@ -251,44 +256,39 @@ def render_js_game(scenario_json):
                 showQuestion(); 
                 enableButtons(true);
             }} else {{
-                // FORKERT: Død med det samme
-                breakGlassAndDie("Forkert svar!");
+                // Forkert svar: Hop til panel og start død
+                setTimeout(() => {{
+                    breakGlassAndDie("Forkert svar!");
+                }}, 300);
             }}
         }}
 
         function breakGlassAndDie(reason) {{
             let panel = panels[currentStep];
             
-            // 1. Start glas-effekt
             if(panel) {{
                 panel.classList.add('shattering');
             }}
             
-            // 2. Lyd: GLAS
             playSoundSnippet(sfxGlass, 1000);
             
-            // 3. Vent KUN 50ms før faldet (Næsten instant)
+            // Start faldet kun lidt efter glasset knuses
             setTimeout(() => {{
-                // Lyd: SKRIG
                 playSoundSnippet(sfxScream, 1500);
                 
-                // FALD: Vi bruger den aktuelle X position men sætter Y til bunden
-                // transform: translate(x, y)
-                // Vi dropper ham ned til y=450
-                playerEl.setAttribute('transform', `translate(${{playerX}}, 450)`); 
+                // AKTIVER FALD I GAME LOOP
+                isFalling = true;
                 
-                // Game Over skærm
                 setTimeout(() => {{
                     playerDie(reason);
                 }}, 1200);
                 
-            }}, 50); // Meget kort pause
+            }}, 100); 
         }}
 
         function updatePositions() {{
-            if (isPlaying) {{
-                playerEl.setAttribute('transform', `translate(${{playerX}}, 150)`);
-            }}
+            // Vi bruger nu både X og Y variablerne
+            playerEl.setAttribute('transform', `translate(${{playerX}}, ${{playerY}})`);
             monsterEl.setAttribute('transform', `translate(${{monsterX}}, 140)`);
         }}
 
@@ -298,23 +298,37 @@ def render_js_game(scenario_json):
             let dt = (timestamp - lastFrameTime) / 1000;
             lastFrameTime = timestamp;
 
-            timeRemaining -= dt;
-            timeEl.innerText = `TID: ${{Math.max(0, timeRemaining).toFixed(1)}}s`;
-
-            let targetX = playerX;
-            let distance = targetX - monsterX;
-            let safeTime = Math.max(timeRemaining, 0.01);
-            let speed = distance / safeTime;
-            
-            monsterX += speed * dt;
-            
-            monsterEl.setAttribute('transform', `translate(${{monsterX}}, 140)`);
-
-            if (timeRemaining <= 0 || monsterX >= (playerX - 10)) {{
-                playerDie("Skyggen fangede dig!");
-            }} else {{
-                requestAnimationFrame(gameLoop);
+            // Opdater tid (kun hvis vi ikke falder, måske? Nej, tid går altid)
+            if (!isFalling) {{
+                timeRemaining -= dt;
+                timeEl.innerText = `TID: ${{Math.max(0, timeRemaining).toFixed(1)}}s`;
             }}
+
+            // --- FYSIC LOGIK ---
+            
+            if (isFalling) {{
+                // Tyngdekraft logik
+                playerVelocityY += gravity * dt; // Øg fart nedad
+                playerY += playerVelocityY * dt; // Flyt position
+            }}
+
+            // Monster Jagt (stopper hvis vi falder)
+            if (!isFalling) {{
+                let targetX = playerX;
+                let distance = targetX - monsterX;
+                let safeTime = Math.max(timeRemaining, 0.01);
+                let speed = distance / safeTime;
+                monsterX += speed * dt;
+                
+                // Tjek fangst
+                if (timeRemaining <= 0 || monsterX >= (playerX - 10)) {{
+                    playerDie("Skyggen fangede dig!");
+                }}
+            }}
+            
+            updatePositions();
+            
+            requestAnimationFrame(gameLoop);
         }}
 
         function playerDie(reason) {{
