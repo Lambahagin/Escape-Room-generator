@@ -38,7 +38,7 @@ if not st.session_state.game_active:
     
     if st.button("START LEVEL", type="primary"):
         with st.spinner("Genererer bane..."):
-            st.session_state.scenario = ai_manager.generate_scenario(fag, emne)
+            st.session_state.scenario = ai_manager.generate_scenario(fag, emne, tema)
             st.session_state.game_active = True
             st.rerun()
 
