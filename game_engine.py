@@ -4,7 +4,7 @@ import json
 def render_js_game(scenario_json):
     """
     Genererer HTML/JS spil.
-    Version: Short Sounds & Better Audio Quality
+    Version: Loud Glass & Better Timing
     """
     game_data = json.dumps(scenario_json)
     
@@ -38,9 +38,9 @@ def render_js_game(scenario_json):
     </head>
     <body>
 
-    <audio id="sfx-glass" src="https://www.soundjay.com/misc/sounds/glass-break-1.mp3"></audio>
-    <audio id="sfx-scream" src="https://www.soundjay.com/human/sounds/man-scream-01.mp3"></audio>
-    <audio id="sfx-win" src="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3"></audio>
+    <audio id="sfx-glass" src="https://www.soundjay.com/misc/sounds/glass-break-2.mp3" preload="auto"></audio>
+    <audio id="sfx-scream" src="https://www.soundjay.com/human/sounds/man-scream-01.mp3" preload="auto"></audio>
+    <audio id="sfx-win" src="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3" preload="auto"></audio>
 
     <div id="game-container">
         <div id="status-bar">
@@ -105,12 +105,12 @@ def render_js_game(scenario_json):
         let currentStep = 0;
         let lives = 3;
         let isPlaying = false;
+        
         let playerX = 50;
         let monsterX = -70; 
         let timeRemaining = totalTime;
         let lastFrameTime = 0;
 
-        // UI Refs
         const playerEl = document.getElementById('player');
         const monsterEl = document.getElementById('monster');
         const timeEl = document.getElementById('timer-display');
@@ -124,31 +124,23 @@ def render_js_game(scenario_json):
         const restartBtn = document.getElementById('restart-btn');
         const panelsGroup = document.getElementById('panels');
 
-        // Sounds
         const sfxGlass = document.getElementById('sfx-glass');
         const sfxScream = document.getElementById('sfx-scream');
         const sfxWin = document.getElementById('sfx-win');
 
-        // NY FUNKTION: Spil lyd kort og præcist
+        // Lyd funktion med varighed
         function playSoundSnippet(audioElement, durationMs) {{
-            // Nulstil lyd
             audioElement.pause();
             audioElement.currentTime = 0;
             
-            // Afspil
             let playPromise = audioElement.play();
-            
             if (playPromise !== undefined) {{
                 playPromise.then(_ => {{
-                    // Stop lyden efter X ms
                     setTimeout(() => {{
                         audioElement.pause();
                         audioElement.currentTime = 0;
                     }}, durationMs);
-                }})
-                .catch(error => {{
-                    console.log("Audio play blocked (user must interact first)");
-                }});
+                }}).catch(error => console.log("Audio prevented"));
             }}
         }}
 
@@ -165,18 +157,25 @@ def render_js_game(scenario_json):
             panels.push(rect);
         }}
 
+        function stopSounds() {{
+            [sfxGlass, sfxScream, sfxWin].forEach(s => {{
+                s.pause();
+                s.currentTime = 0;
+            }});
+        }}
+
         function startGame() {{
+            stopSounds();
+            
             currentStep = 0;
             isPlaying = true;
             timeRemaining = totalTime;
             lastFrameTime = performance.now();
             
-            // Hop direkte ud på første panel ved start
             playerX = 150; 
             monsterX = -70; 
             updatePositions();
             
-            // Nulstil paneler
             panels.forEach(p => {{
                 p.style.display = 'block';
                 p.classList.remove('shattering');
@@ -191,9 +190,10 @@ def render_js_game(scenario_json):
         }}
 
         function restartLevel() {{
+            stopSounds();
             lives--;
             if (lives <= 0) {{
-                alert("GAME OVER - Du skal genstarte spillet.");
+                alert("GAME OVER - Genstart påkrævet.");
                 location.reload();
                 return;
             }}
@@ -212,8 +212,7 @@ def render_js_game(scenario_json):
             btn1.style.display = "block";
             btn2.style.display = "block";
             
-            let targetX = 150 + (currentStep * 100);
-            playerX = targetX;
+            playerX = 150 + (currentStep * 100);
             updatePositions();
         }}
 
@@ -234,9 +233,7 @@ def render_js_game(scenario_json):
             enableButtons(false);
 
             if (choice === q.correct) {{
-                // KORREKT
                 currentStep++;
-                // Hvis færdig, hop til sikkerhed, ellers næste panel
                 if (currentStep < 4) {{
                     playerX = 150 + (currentStep * 100);
                 }} else {{
@@ -247,7 +244,6 @@ def render_js_game(scenario_json):
                 enableButtons(true);
                 
             }} else {{
-                // FORKERT
                 setTimeout(() => {{
                     breakGlassAndDie("Forkert svar!");
                 }}, 300);
@@ -257,22 +253,19 @@ def render_js_game(scenario_json):
         function breakGlassAndDie(reason) {{
             let panel = panels[currentStep];
             
-            // 1. Visuel splintring
             if(panel) {{
                 panel.classList.add('shattering');
             }}
             
-            // 2. Lyd: Glas (Spil i 800ms)
-            playSoundSnippet(sfxGlass, 800);
+            // 1. Spil GLAS lyd (nu lidt længere: 1500ms)
+            playSoundSnippet(sfxGlass, 1500);
             
             setTimeout(() => {{
-                // 3. Lyd: Skrig (Spil i 1500ms)
+                // 2. Spil SKRIG (efter 300ms)
                 playSoundSnippet(sfxScream, 1500);
                 
-                // 4. Fald ned
                 playerEl.setAttribute('transform', `translate(${{playerX}}, 450)`); 
                 
-                // 5. Game Over
                 setTimeout(() => {{
                     playerDie(reason);
                 }}, 1500);
@@ -296,17 +289,14 @@ def render_js_game(scenario_json):
             timeRemaining -= dt;
             timeEl.innerText = `TID: ${{Math.max(0, timeRemaining).toFixed(1)}}s`;
 
-            // Monster Jagt
             let targetX = playerX;
             let distance = targetX - monsterX;
             let safeTime = Math.max(timeRemaining, 0.01);
             let speed = distance / safeTime;
             
             monsterX += speed * dt;
-            
             monsterEl.setAttribute('transform', `translate(${{monsterX}}, 140)`);
 
-            // Tjek tid/fangst
             if (timeRemaining <= 0 || monsterX >= (playerX - 10)) {{
                 playerDie("Skyggen fangede dig!");
             }} else {{
@@ -325,9 +315,8 @@ def render_js_game(scenario_json):
 
         function winGame() {{
             isPlaying = false;
-            // Spil sejrslyd i 2 sekunder
+            stopSounds();
             playSoundSnippet(sfxWin, 2000);
-            
             overlay.style.display = "flex";
             overlayText.innerText = "RUM KLARET!";
             overlayText.style.color = "lime";
