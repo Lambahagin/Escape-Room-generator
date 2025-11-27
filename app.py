@@ -2,11 +2,12 @@ import streamlit as st
 import streamlit.components.v1 as components
 import ai_manager
 import game_bridge
-import assets # For at få listen af temaer
-import random # Til tilfældighed
+import assets # Nu skulle den kunne finde AVAILABLE_THEMES
+import random
 
 # --- 1. OPSÆTNING ---
-st.set_page_config(page_title="Sumvival Game", page_icon="🎲", layout="centered")
+# Her ændres navnet på browser-fanen
+st.set_page_config(page_title="Fagligt Escape Room", page_icon="🎓", layout="centered")
 
 st.markdown("""
 <style>
@@ -21,11 +22,10 @@ st.markdown("""
 if 'game_active' not in st.session_state: st.session_state.game_active = False
 if 'scenario' not in st.session_state: st.session_state.scenario = None
 if 'current_level' not in st.session_state: st.session_state.current_level = 1
-# Vi gemmer det nuværende tema i session state, så det ikke skifter midt i spillet
 if 'current_theme' not in st.session_state: st.session_state.current_theme = "squid"
 
 # --- 3. MENU ---
-st.sidebar.title("🎲 GAMEMASTER")
+st.sidebar.title("💀 GAMEMASTER")
 st.sidebar.markdown(f"### LEVEL: {st.session_state.current_level}")
 
 fag = st.sidebar.selectbox("Fag", ["Matematik", "Fysik"])
@@ -37,14 +37,15 @@ if st.sidebar.button("RESET GAME (Level 1)"):
     st.rerun()
 
 # --- 4. MAIN ---
-st.title("🧩 SUMVIVAL GAME")
+# Her ændres navnet på selve siden
+st.title("🎓 Fagligt Escape Room")
 
 if not st.session_state.game_active:
     st.info(f"Klar til Niveau {st.session_state.current_level}. Game Masteren vælger et univers...")
     
     if st.button("START NY VERDEN", type="primary"):
         with st.spinner("Rejser gennem multiverset..."):
-            # 1. Vælg tilfældigt tema
+            # 1. Vælg tilfældigt tema (kræver at assets.py er opdateret)
             new_theme = random.choice(assets.AVAILABLE_THEMES)
             st.session_state.current_theme = new_theme
             
@@ -63,7 +64,7 @@ else:
     """, unsafe_allow_html=True)
     
     # Render spil med det valgte tema
-    game_html = game_bridge.render(st.session_state.scenario, theme=st.session_state.current_theme)
+    game_html = game_bridge.render_js_game(st.session_state.scenario)
     components.html(game_html, height=500)
     
     st.markdown("---")
