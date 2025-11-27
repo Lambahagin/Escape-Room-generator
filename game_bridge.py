@@ -2,19 +2,18 @@
 import json
 import assets
 
-# VIGTIGT: Vi omdøber funktionen her til 'render_game' så den matcher app.py
 def render_game(scenario_json, theme="squid"):
     """
     Genererer HTML/JS spil.
-    Kombinerer Fysik/Lyd fra V13 med Temaer fra V15.
+    Version: 16.0 - Animated Sprites & Lower Monster
     """
     game_data = json.dumps(scenario_json)
     
-    # Hent tema farver og figurer
     colors = assets.get_theme_colors(theme)
     player_svg = assets.get_player_svg(theme)
     monster_svg = assets.get_monster_svg(theme)
     
+    # HTML KODE START
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -45,6 +44,7 @@ def render_game(scenario_json, theme="squid"):
         .shattering {{ animation: shatter 0.2s forwards; }}
         
         .panel-normal {{ fill: {colors['glass']}; stroke: {colors['bridge']}; stroke-width: 1; }}
+        
         #player {{ transition: transform 0.5s cubic-bezier(0.5, 0, 1, 1); }}
         .falling {{ transition: none !important; }}
     </style>
@@ -74,7 +74,7 @@ def render_game(scenario_json, theme="squid"):
                 {player_svg}
             </g>
 
-            <g id="monster" transform="translate(-100, 140)">
+            <g id="monster" transform="translate(-100, 160)">
                 {monster_svg}
             </g>
             
@@ -249,9 +249,7 @@ def render_game(scenario_json, theme="squid"):
                 showQuestion(); 
                 enableButtons(true);
             }} else {{
-                setTimeout(() => {{
-                    breakGlassAndDie("Forkert svar!");
-                }}, 300);
+                setTimeout(() => {{ breakGlassAndDie("Forkert svar!"); }}, 300);
             }}
         }}
 
@@ -263,10 +261,8 @@ def render_game(scenario_json, theme="squid"):
             
             setTimeout(() => {{
                 playSoundSnippet(sfxScream, 1500);
-                
-                // Aktiver fald i Game Loop
                 isFalling = true;
-                playerEl.classList.add('falling'); // Slå CSS transition fra
+                playerEl.classList.add('falling'); 
                 
                 setTimeout(() => {{
                     playerDie(reason);
@@ -278,7 +274,8 @@ def render_game(scenario_json, theme="squid"):
             if (isPlaying) {{
                 playerEl.setAttribute('transform', `translate(${{playerX}}, ${{playerY}})`);
             }}
-            monsterEl.setAttribute('transform', `translate(${{monsterX}}, 140)`);
+            // MONSTER: Justeret Y-akse til 160 (lavere)
+            monsterEl.setAttribute('transform', `translate(${{monsterX}}, 160)`);
         }}
 
         function gameLoop(timestamp) {{
@@ -288,13 +285,11 @@ def render_game(scenario_json, theme="squid"):
             timeRemaining -= dt;
             timeEl.innerText = `TID: ${{Math.max(0, timeRemaining).toFixed(1)}}s`;
 
-            // Fysik - Fald
             if (isFalling) {{
                 playerVelocityY += gravity * dt;
                 playerY += playerVelocityY * dt;
             }}
 
-            // Fysik - Monster
             if (!isFalling) {{
                 let targetX = playerX;
                 let distance = targetX - monsterX;
