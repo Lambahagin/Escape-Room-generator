@@ -4,7 +4,7 @@ import json
 def render_js_game(scenario_json):
     """
     Genererer HTML/JS spil.
-    Version: Loud Glass & Better Timing
+    Version: Instant Fall & Volume Boost
     """
     game_data = json.dumps(scenario_json)
     
@@ -31,9 +31,15 @@ def render_js_game(scenario_json):
             20% {{ fill: white; opacity: 0.8; }}
             100% {{ opacity: 0; transform: scale(0.9); }}
         }}
-        .shattering {{ animation: shatter 0.4s forwards; }}
+        .shattering {{ animation: shatter 0.2s forwards; }}
         
         .panel-normal {{ fill: rgba(0,255,255,0.2); stroke: cyan; stroke-width: 1; }}
+        
+        /* Fald animation (CSS Class trigger) */
+        .falling {{
+            transition: transform 1s ease-in;
+            transform: translate(0px, 300px) !important; /* Relativt drop */
+        }}
     </style>
     </head>
     <body>
@@ -105,12 +111,12 @@ def render_js_game(scenario_json):
         let currentStep = 0;
         let lives = 3;
         let isPlaying = false;
-        
         let playerX = 50;
         let monsterX = -70; 
         let timeRemaining = totalTime;
         let lastFrameTime = 0;
 
+        // Refs
         const playerEl = document.getElementById('player');
         const monsterEl = document.getElementById('monster');
         const timeEl = document.getElementById('timer-display');
@@ -124,27 +130,30 @@ def render_js_game(scenario_json):
         const restartBtn = document.getElementById('restart-btn');
         const panelsGroup = document.getElementById('panels');
 
+        // Sounds
         const sfxGlass = document.getElementById('sfx-glass');
         const sfxScream = document.getElementById('sfx-scream');
         const sfxWin = document.getElementById('sfx-win');
 
-        // Lyd funktion med varighed
+        // Lyd med tvungen volumen
         function playSoundSnippet(audioElement, durationMs) {{
-            audioElement.pause();
+            audioElement.volume = 1.0; // Skru helt op
             audioElement.currentTime = 0;
             
             let playPromise = audioElement.play();
             if (playPromise !== undefined) {{
                 playPromise.then(_ => {{
-                    setTimeout(() => {{
-                        audioElement.pause();
-                        audioElement.currentTime = 0;
-                    }}, durationMs);
+                    if(durationMs > 0) {{
+                        setTimeout(() => {{
+                            audioElement.pause();
+                            audioElement.currentTime = 0;
+                        }}, durationMs);
+                    }}
                 }}).catch(error => console.log("Audio prevented"));
             }}
         }}
 
-        // Init Paneler
+        // Init
         let panels = [];
         for(let i=0; i<4; i++) {{
             let rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -166,7 +175,6 @@ def render_js_game(scenario_json):
 
         function startGame() {{
             stopSounds();
-            
             currentStep = 0;
             isPlaying = true;
             timeRemaining = totalTime;
@@ -242,35 +250,39 @@ def render_js_game(scenario_json):
                 updatePositions();
                 showQuestion(); 
                 enableButtons(true);
-                
             }} else {{
-                setTimeout(() => {{
-                    breakGlassAndDie("Forkert svar!");
-                }}, 300);
+                // FORKERT: Død med det samme
+                breakGlassAndDie("Forkert svar!");
             }}
         }}
 
         function breakGlassAndDie(reason) {{
             let panel = panels[currentStep];
             
+            // 1. Start glas-effekt
             if(panel) {{
                 panel.classList.add('shattering');
             }}
             
-            // 1. Spil GLAS lyd (nu lidt længere: 1500ms)
-            playSoundSnippet(sfxGlass, 1500);
+            // 2. Lyd: GLAS
+            playSoundSnippet(sfxGlass, 1000);
             
+            // 3. Vent KUN 50ms før faldet (Næsten instant)
             setTimeout(() => {{
-                // 2. Spil SKRIG (efter 300ms)
+                // Lyd: SKRIG
                 playSoundSnippet(sfxScream, 1500);
                 
+                // FALD: Vi bruger den aktuelle X position men sætter Y til bunden
+                // transform: translate(x, y)
+                // Vi dropper ham ned til y=450
                 playerEl.setAttribute('transform', `translate(${{playerX}}, 450)`); 
                 
+                // Game Over skærm
                 setTimeout(() => {{
                     playerDie(reason);
-                }}, 1500);
+                }}, 1200);
                 
-            }}, 300); 
+            }}, 50); // Meget kort pause
         }}
 
         function updatePositions() {{
@@ -295,6 +307,7 @@ def render_js_game(scenario_json):
             let speed = distance / safeTime;
             
             monsterX += speed * dt;
+            
             monsterEl.setAttribute('transform', `translate(${{monsterX}}, 140)`);
 
             if (timeRemaining <= 0 || monsterX >= (playerX - 10)) {{
