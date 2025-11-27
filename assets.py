@@ -1,7 +1,6 @@
-# assets.py
 import textwrap
 
-# Liste over alle mulige temaer - bruges af app.py til at vælge tilfældigt
+# --- DENNE LINJE MANGLEDE NOK SIDST: ---
 AVAILABLE_THEMES = ["squid", "wonderland", "cyberpunk", "jungle"]
 
 def get_theme_colors(theme):
@@ -13,12 +12,12 @@ def get_theme_colors(theme):
     elif theme == "cyberpunk":
         return {
             "bg_center": "#003300", "bg_edge": "#000000",   
-            "platform": "#001100", "bridge": "#00ff00", "glass": "rgba(0, 255, 0, 0.15)" # Matrix stil
+            "platform": "#001100", "bridge": "#00ff00", "glass": "rgba(0, 255, 0, 0.15)"
         }
     elif theme == "jungle":
         return {
             "bg_center": "#88aa00", "bg_edge": "#223300",   
-            "platform": "#5c4033", "bridge": "#d2b48c", "glass": "rgba(255, 255, 255, 0.15)" # Træbro look
+            "platform": "#5c4033", "bridge": "#d2b48c", "glass": "rgba(255, 255, 255, 0.15)"
         }
     else: # Default: squid
         return {
@@ -28,7 +27,7 @@ def get_theme_colors(theme):
 
 def get_player_svg(theme):
     if theme == "wonderland":
-        # Alice (Blå kjole)
+        # Alice
         return """
             <circle cx="0" cy="0" r="10" fill="#ffccaa" />
             <path d="M -10,10 L 10,10 L 15,40 L -15,40 Z" fill="#3498db" />
@@ -38,7 +37,7 @@ def get_player_svg(theme):
             <line x1="5" y1="40" x2="5" y2="60" stroke="white" stroke-width="3" />
         """
     elif theme == "cyberpunk":
-        # Hacker (Grøn data-mand)
+        # Hacker
         return """
             <rect x="-10" y="-15" width="20" height="20" fill="none" stroke="#0f0" stroke-width="2" />
             <line x1="-5" y1="-8" x2="5" y2="-8" stroke="#0f0" stroke-width="2" />
@@ -49,10 +48,12 @@ def get_player_svg(theme):
             <line x1="0" y1="40" x2="10" y2="60" stroke="#0f0" stroke-width="2" />
         """
     elif theme == "jungle":
-        # Eventyrer (Brun hat)
+        # Eventyrer
         return """
             <circle cx="0" cy="0" r="10" fill="#ffccaa" />
-            <path d="M -15,-5 L 15,-5 L 10,-15 L -10,-15 Z" fill="#8B4513" /> <line x1="0" y1="10" x2="0" y2="40" stroke="#d2b48c" stroke-width="4" /> <line x1="0" y1="20" x2="-15" y2="35" stroke="#ffccaa" stroke-width="3" />
+            <path d="M -15,-5 L 15,-5 L 10,-15 L -10,-15 Z" fill="#8B4513" />
+            <line x1="0" y1="10" x2="0" y2="40" stroke="#d2b48c" stroke-width="4" />
+            <line x1="0" y1="20" x2="-15" y2="35" stroke="#ffccaa" stroke-width="3" />
             <line x1="0" y1="20" x2="15" y2="35" stroke="#ffccaa" stroke-width="3" />
             <line x1="0" y1="40" x2="-10" y2="60" stroke="#5c4033" stroke-width="3" />
             <line x1="0" y1="40" x2="10" y2="60" stroke="#5c4033" stroke-width="3" />
@@ -81,7 +82,7 @@ def get_monster_svg(theme):
             <circle cx="10" cy="-25" r="5" fill="#f1c40f" />
         """
     elif theme == "cyberpunk":
-        # Glitch Virus (Rød og kantet)
+        # Glitch Virus
         return """
             <path d="M -20,0 L -30,-30 L 0,-50 L 30,-30 L 20,0 L 0,20 Z" fill="#ff0000" opacity="0.8" filter="url(#glow)"/>
             <rect x="-15" y="-35" width="10" height="10" fill="black" />
@@ -89,9 +90,11 @@ def get_monster_svg(theme):
             <path d="M -25,-10 L -40,-20 M 25,-10 L 40,-20 M 0,20 L 0,40" stroke="red" stroke-width="2" />
         """
     elif theme == "jungle":
-        # Kæmpe Edderkop
+        # Edderkop
         return """
-            <circle cx="0" cy="-20" r="20" fill="#111" /> <circle cx="0" cy="-45" r="12" fill="#111" /> <path d="M -10,-20 L -35,-40 M -10,-10 L -40,0 M -10,0 L -35,30" stroke="black" stroke-width="4" fill="none" />
+            <circle cx="0" cy="-20" r="20" fill="#111" />
+            <circle cx="0" cy="-45" r="12" fill="#111" />
+            <path d="M -10,-20 L -35,-40 M -10,-10 L -40,0 M -10,0 L -35,30" stroke="black" stroke-width="4" fill="none" />
             <path d="M 10,-20 L 35,-40 M 10,-10 L 40,0 M 10,0 L 35,30" stroke="black" stroke-width="4" fill="none" />
             <circle cx="-4" cy="-48" r="2" fill="red" />
             <circle cx="4" cy="-48" r="2" fill="red" />
