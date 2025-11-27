@@ -1,14 +1,16 @@
 # game_bridge.py
 import json
-import assets 
+import assets
 
-def render(scenario_json, theme="squid"):
+# VIGTIGT: Vi omdøber funktionen her til 'render_game' så den matcher app.py
+def render_game(scenario_json, theme="squid"):
     """
-    Genererer HTML/JS for Glasbro-spillet.
+    Genererer HTML/JS spil.
+    Kombinerer Fysik/Lyd fra V13 med Temaer fra V15.
     """
     game_data = json.dumps(scenario_json)
     
-    # Hent tema-specifikke farver og figurer
+    # Hent tema farver og figurer
     colors = assets.get_theme_colors(theme)
     player_svg = assets.get_player_svg(theme)
     monster_svg = assets.get_monster_svg(theme)
@@ -108,7 +110,12 @@ def render(scenario_json, theme="squid"):
         let currentStep = 0;
         let lives = 3;
         let isPlaying = false;
+        
         let playerX = 50;
+        let playerY = 150; 
+        let playerVelocityY = 0; 
+        let gravity = 800; 
+        
         let monsterX = -70; 
         let timeRemaining = totalTime;
         let lastFrameTime = 0;
@@ -142,7 +149,7 @@ def render(scenario_json, theme="squid"):
                             audioElement.currentTime = 0;
                         }}, durationMs);
                     }}
-                }}).catch(error => console.log("Audio prevented"));
+                }}).catch(error => console.log("Audio blocked"));
             }}
         }}
 
@@ -169,8 +176,12 @@ def render(scenario_json, theme="squid"):
             isFalling = false;
             timeRemaining = totalTime;
             lastFrameTime = performance.now();
+            
             playerX = 150; 
+            playerY = 150; 
+            playerVelocityY = 0;
             monsterX = -70; 
+            
             updatePositions();
             
             panels.forEach(p => {{
@@ -180,6 +191,7 @@ def render(scenario_json, theme="squid"):
             
             overlay.style.display = 'none';
             livesEl.innerHTML = "❤️".repeat(lives) + "🖤".repeat(3-lives);
+            
             enableButtons(true);
             showQuestion();
             requestAnimationFrame(gameLoop);
@@ -189,7 +201,7 @@ def render(scenario_json, theme="squid"):
             stopSounds();
             lives--;
             if (lives <= 0) {{
-                alert("GAME OVER");
+                alert("GAME OVER - Genstart spillet.");
                 location.reload();
                 return;
             }}
@@ -237,37 +249,34 @@ def render(scenario_json, theme="squid"):
                 showQuestion(); 
                 enableButtons(true);
             }} else {{
-                // FIX: SPIL LYD MED DET SAMME!
-                playSoundSnippet(sfxGlass, 1000); // 1. Lyd starter
-                
-                // Visuel forsinkelse på 50ms så man når at se det
                 setTimeout(() => {{
                     breakGlassAndDie("Forkert svar!");
-                }}, 50);
+                }}, 300);
             }}
         }}
 
         function breakGlassAndDie(reason) {{
             let panel = panels[currentStep];
-            isFalling = true; // Stop fysik-korrektion
-            
             if(panel) {{ panel.classList.add('shattering'); }}
             
-            // 2. Skrig starter kort efter
+            playSoundSnippet(sfxGlass, 1000);
+            
             setTimeout(() => {{
                 playSoundSnippet(sfxScream, 1500);
-                // Faldet sker
-                playerEl.setAttribute('transform', `translate(${{playerX}}, 450)`); 
+                
+                // Aktiver fald i Game Loop
+                isFalling = true;
+                playerEl.classList.add('falling'); // Slå CSS transition fra
                 
                 setTimeout(() => {{
                     playerDie(reason);
                 }}, 1200);
-            }}, 100); 
+            }}, 50); 
         }}
 
         function updatePositions() {{
-            if (isPlaying && !isFalling) {{
-                playerEl.setAttribute('transform', `translate(${{playerX}}, 150)`);
+            if (isPlaying) {{
+                playerEl.setAttribute('transform', `translate(${{playerX}}, ${{playerY}})`);
             }}
             monsterEl.setAttribute('transform', `translate(${{monsterX}}, 140)`);
         }}
@@ -279,19 +288,26 @@ def render(scenario_json, theme="squid"):
             timeRemaining -= dt;
             timeEl.innerText = `TID: ${{Math.max(0, timeRemaining).toFixed(1)}}s`;
 
-            let targetX = playerX;
-            let distance = targetX - monsterX;
-            let safeTime = Math.max(timeRemaining, 0.01);
-            let speed = distance / safeTime;
-            
-            monsterX += speed * dt;
-            updatePositions(); // Flytter monsteret
-
-            if (timeRemaining <= 0 || monsterX >= (playerX - 10)) {{
-                playerDie("Skyggen fangede dig!");
-            }} else {{
-                requestAnimationFrame(gameLoop);
+            // Fysik - Fald
+            if (isFalling) {{
+                playerVelocityY += gravity * dt;
+                playerY += playerVelocityY * dt;
             }}
+
+            // Fysik - Monster
+            if (!isFalling) {{
+                let targetX = playerX;
+                let distance = targetX - monsterX;
+                let safeTime = Math.max(timeRemaining, 0.01);
+                let speed = distance / safeTime;
+                monsterX += speed * dt;
+                if (timeRemaining <= 0 || monsterX >= (playerX - 10)) {{
+                    playerDie("Skyggen fangede dig!");
+                }}
+            }}
+            
+            updatePositions();
+            requestAnimationFrame(gameLoop);
         }}
 
         function playerDie(reason) {{
